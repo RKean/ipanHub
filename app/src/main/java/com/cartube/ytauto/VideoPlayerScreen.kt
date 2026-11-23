@@ -16,30 +16,24 @@ import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 
-/**
- * Full-screen video on the head unit via [NavigationTemplate] + [SurfaceCallback].
- * Only ExoPlayer writes to the surface — no canvas/HWUI overlay (single producer).
- */
 class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), SurfaceCallback {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var surfaceAttached = false
-    private val playbackTick = object : Runnable {
+    private val playbackListener = { invalidate() }
+    private val tick = object : Runnable {
         override fun run() {
-            if (surfaceAttached && PlaybackController.player?.isPlaying == true) {
-                invalidate()
-            }
+            if (surfaceAttached) invalidate()
             mainHandler.postDelayed(this, 2_000L)
         }
     }
-    private val playbackListener = { invalidate() }
 
     init {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onCreate(owner: LifecycleOwner) {
                 PlaybackController.addPlaybackListener(playbackListener)
-                mainHandler.post(playbackTick)
+                mainHandler.post(tick)
             }
 
             override fun onStop(owner: LifecycleOwner) {
@@ -48,10 +42,9 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
-                mainHandler.removeCallbacks(playbackTick)
+                mainHandler.removeCallbacks(tick)
                 PlaybackController.removePlaybackListener(playbackListener)
                 PlaybackController.releaseCarSurface()
-                surfaceAttached = false
             }
         })
     }
@@ -65,7 +58,6 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     }
 
     override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
-        Log.i(CarTubePlaybackService.TAG, "[car] surface destroyed — detaching player")
         surfaceAttached = false
         PlaybackController.releaseCarSurface()
     }
@@ -74,32 +66,19 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
         val player = PlaybackController.player
         val playing = player?.isPlaying == true
 
-        val playPause = iconAction(
-            if (playing) R.drawable.ic_pause else R.drawable.ic_play
-        ) {
-            player?.let { p -> if (p.isPlaying) p.pause() else p.play() }
-            invalidate()
-        }
-
-        val seekBack = iconAction(R.drawable.ic_skip_back) {
-            val pos = player?.currentPosition ?: 0L
-            player?.seekTo((pos - 10_000L).coerceAtLeast(0L))
-            invalidate()
-        }
-
-        val seekForward = iconAction(R.drawable.ic_skip_forward) {
-            val pos = player?.currentPosition ?: 0L
-            val end = player?.duration?.coerceAtLeast(0L) ?: 0L
-            player?.seekTo((pos + 10_000L).coerceAtMost(end))
-            invalidate()
-        }
-
         return NavigationTemplate.Builder()
             .setActionStrip(
                 ActionStrip.Builder()
-                    .addAction(seekBack)
-                    .addAction(playPause)
-                    .addAction(seekForward)
+                    .addAction(iconAction(R.drawable.ic_skip_back) {
+                        CarTubePlaybackService.requestSkipPrevious(carContext)
+                    })
+                    .addAction(iconAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play) {
+                        player?.let { if (it.isPlaying) it.pause() else it.play() }
+                        invalidate()
+                    })
+                    .addAction(iconAction(R.drawable.ic_skip_forward) {
+                        CarTubePlaybackService.requestSkipNext(carContext)
+                    })
                     .build()
             )
             .build()
@@ -107,9 +86,7 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
 
     private fun iconAction(iconRes: Int, onClick: () -> Unit): Action {
         return Action.Builder()
-            .setIcon(
-                CarIcon.Builder(IconCompat.createWithResource(carContext, iconRes)).build()
-            )
+            .setIcon(CarIcon.Builder(IconCompat.createWithResource(carContext, iconRes)).build())
             .setOnClickListener(onClick)
             .build()
     }

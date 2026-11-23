@@ -65,7 +65,7 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
         val description = MediaDescriptionCompat.Builder()
             .setMediaId(ROOT_ID)
             .setTitle(getString(R.string.app_name))
-            .setSubtitle(getString(R.string.phone_hint))
+            .setSubtitle(getString(R.string.search_prompt))
             .build()
         val rootItem = MediaBrowserCompat.MediaItem(
             description,

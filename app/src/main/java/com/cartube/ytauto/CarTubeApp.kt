@@ -1,6 +1,7 @@
 package com.cartube.ytauto
 
 import android.app.Application
+import com.cartube.ytauto.queue.QueueController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,7 @@ class CarTubeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        QueueController.init(this)
         appScope.launch(Dispatchers.IO) {
             NewPipe.init(NewPipeDownloader.getInstance())
         }

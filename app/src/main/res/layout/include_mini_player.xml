@@ -98,6 +98,14 @@
                 android:layout_height="48dp"
                 app:icon="@drawable/ic_skip_forward"
                 app:iconTint="@color/md_theme_on_surface" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/queueNext"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_skip_forward"
+                app:iconTint="@color/md_theme_primary" />
         </LinearLayout>
 
         <TextView

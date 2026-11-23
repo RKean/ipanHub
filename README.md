@@ -1,77 +1,42 @@
 # CarTube
 
-Personal-use Android app that browses YouTube on the phone and shows **video-only** playback on **Android Auto** head units (including your 2025 Chery Tiggo 7 PHEV with wired/wireless AA).
+Personal-use Android app: **co-driver picks songs on the phone**, **video plays on Android Auto** via NavigationTemplate + ExoPlayer.
 
-> **Safety:** Use only while **parked**. Watching video while driving is dangerous and may be illegal. This app is **not** on Google Play and is intended for sideloading on your own devices.
+> **Safety:** Use only while **parked**.
 
-## How it works
+## v1.2.0 — Remote + queue
 
 | Surface | Behavior |
 |---------|----------|
-| **Phone** | In-app `WebView` loads `https://m.youtube.com` so you can search, sign in, and pick videos like the mobile site. |
-| **Android Auto (video)** | `CarTubeCarAppService` + **NavigationTemplate** + **surface** → ExoPlayer draws video on the head unit (requires **Play-source install** — see below). |
-| **Android Auto (audio fallback)** | If installed normally, only **MediaBrowserService** passes AA validation → **audio + thumbnail** on the media UI. |
+| **Phone** | Native Material 3 **search** (NewPipe), **queue**, mini-player remote — **no on-screen video** |
+| **Car** | Fullscreen video; prev / play-pause / next map to the queue |
+| **No AA** | **Audio-only** foreground playback on the phone |
 
-**Important:** A normal APK install shows **audio only** on the car. For **video on screen**, follow **[docs/VIDEO_ON_CAR.md](docs/VIDEO_ON_CAR.md)** (Windows `adb install -i com.android.vending …` or Shizuku + UnknownAuto).
+Share a YouTube link into CarTube to queue/play.
 
 ## Build
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleDebug test
 ```
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`
+APK: `app/build/outputs/apk/debug/app-debug.apk`
 
-## Quick install (phone only — audio on car, no head-unit video)
+## Play-source install (video on car screen)
 
-1. Install the APK from a file manager.
-2. Android Auto → Developer mode → **Unknown sources** ON.
-3. **Customize launcher** → enable CarTube (often under **Media**).
-
-## Video on the Chery display (required steps)
-
-See **[docs/VIDEO_ON_CAR.md](docs/VIDEO_ON_CAR.md)**. Short version:
+See **[docs/VIDEO_ON_CAR.md](docs/VIDEO_ON_CAR.md)**:
 
 ```bat
-adb uninstall com.cartube.ytauto
 adb install -r -g -i com.android.vending cartube-debug.apk
 ```
 
-Then open **CarTube from the AA app list (navigation)**, not only the Media entry.
+## Architecture
 
-The phone app shows an orange/green **install banner** and an in-app guide (tap the banner).
-
-## Android Auto developer setup
-
-1. Android Auto → Settings → tap **Version** 10× → **Developer settings** → **Unknown sources** ON.
-2. **Customize launcher** → check CarTube.
-3. Reboot phone + reconnect USB/wireless AA if the app list is stale.
-
-## Phone background playback (v1.1.3)
-
-When you play a video in the WebView and **leave the app or lock the screen**, CarTube **hands off** to the foreground player at the current position (like Premium background play). Use the media notification or Bluetooth headset buttons.
-
-**Tips if audio stops on your OEM phone:** Settings → Apps → CarTube → Battery → **Unrestricted** (disable aggressive optimization).
-
-## Features (v1.1.3)
-
-- With **Android Auto connected**, tap play in the WebView → video starts on the car automatically (no button)
-- Single **ExoPlayer** via **MediaSession** — phone mini-player stays in sync with the car (play/pause/seek)
-- Material 3 dark UI, search bar, dismissible install chip, remote mini-player when FGS is active
-- Car **NavigationTemplate** uses icon-only actions (ExoPlayer is the sole surface producer — no canvas overlay)
-- WebView **ad request blocking** + in-page ad skip; WebView muted while car/background plays
-- NewPipe **v0.26.5** stream resolution + InnerTube fallback (extracted stream has no preroll)
-- Foreground **MediaSessionService** playback (survives phone home/screen off)
-- Media-browser registration for visibility when sideloaded
-- Play-source install guide + artwork on media UI when video template unavailable
+- **QueueController** — persisted queue + play head (disk)
+- **CarTubePlaybackService** — single ExoPlayer + MediaSession; auto-advance; prefetch next stream; **StreamCache**
+- **PlaybackClient** — phone UI sync
+- Hidden **CookieWebView** for YouTube cookies only
 
 ## Verified in CI
 
-| Check | Result |
-|-------|--------|
-| `assembleDebug` / unit tests | Pass |
-| Real Chery Tiggo 7 PHEV | User-tested: media UI works; video needs Play-source install |
-
-## License
-
-Personal/educational use. YouTube content is subject to YouTube’s Terms of Service.
+`assembleDebug` and unit tests (including `QueueControllerTest`) pass.

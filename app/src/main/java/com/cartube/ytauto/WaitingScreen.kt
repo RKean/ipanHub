@@ -32,7 +32,7 @@ class WaitingScreen(carContext: CarContext) : SafeCarScreen(carContext) {
 
     override fun buildTemplate(): Template {
         val body = buildString {
-            append(carContext.getString(R.string.waiting_for_video))
+            append(carContext.getString(R.string.car_pick_on_phone))
             append("\n\n")
             append(carContext.getString(R.string.parked_only_hint))
         }

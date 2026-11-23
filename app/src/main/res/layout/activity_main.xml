@@ -17,8 +17,43 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/md_theme_surface_container_high"
+            app:menu="@menu/main_menu"
             app:title="@string/app_name"
             app:titleTextColor="@color/md_theme_on_surface" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/installBannerCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/installBanner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp" />
+
+                <ImageButton
+                    android:id="@+id/installBannerDismiss"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/dismiss"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/searchLayout"
@@ -26,7 +61,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="12dp"
-            android:layout_marginBottom="4dp"
             android:hint="@string/search_hint"
             app:boxBackgroundColor="@color/md_theme_surface_container"
             app:startIconDrawable="@android:drawable/ic_menu_search">
@@ -37,114 +71,76 @@
                 android:layout_height="wrap_content"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
-                android:maxLines="1"
-                android:textColor="@color/md_theme_on_surface" />
+                android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/installBannerCard"
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/tabChips"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="12dp"
-            android:layout_marginBottom="6dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/banner_warn"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="0dp">
+            android:paddingHorizontal="12dp"
+            app:singleSelection="true"
+            app:selectionRequired="true">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipSearch"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingHorizontal="12dp"
-                android:paddingVertical="8dp">
+                android:checked="true"
+                android:text="@string/tab_search" />
 
-                <TextView
-                    android:id="@+id/installBanner"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:textColor="@color/banner_warn_text"
-                    android:textSize="12sp" />
-
-                <ImageButton
-                    android:id="@+id/installBannerDismiss"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/dismiss"
-                    android:src="@android:drawable/ic_menu_close_clear_cancel"
-                    app:tint="@color/banner_warn_text" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.progressindicator.LinearProgressIndicator
-            android:id="@+id/progressBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:indeterminate="false"
-            android:max="100"
-            android:visibility="gone"
-            app:indicatorColor="@color/md_theme_primary"
-            app:trackColor="@color/md_theme_outline" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipQueue"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_queue" />
+        </com.google.android.material.chip.ChipGroup>
 
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <WebView
-                android:id="@+id/webView"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/searchList"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingBottom="8dp" />
 
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/carRemoteOverlay"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/queueList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingBottom="8dp"
+                android:visibility="gone" />
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/searchLoading"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
-                android:layout_margin="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="#CC1E1E1E"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="4dp">
+                android:indeterminate="true"
+                android:visibility="gone" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/remote_playing_on_car"
-                        android:textColor="@color/md_theme_primary"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/remoteTitle"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:ellipsize="end"
-                        android:maxLines="2"
-                        android:textColor="@color/md_theme_on_surface"
-                        android:textSize="15sp" />
-
-                    <TextView
-                        android:id="@+id/remoteSub"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="@string/webview_silenced_hint"
-                        android:textColor="@color/md_theme_outline"
-                        android:textSize="12sp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            <TextView
+                android:id="@+id/emptyLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:padding="24dp"
+                android:text="@string/search_prompt"
+                android:textColor="@color/md_theme_outline"
+                android:visibility="gone" />
         </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/cookieWebViewHost"
+            android:layout_width="1dp"
+            android:layout_height="1dp" />
 
         <include
             android:id="@+id/miniPlayer"

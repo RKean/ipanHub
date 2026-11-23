@@ -11,8 +11,8 @@ android {
         applicationId = "com.cartube.ytauto"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.1.3"
+        versionCode = 10
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -68,6 +68,7 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("com.google.guava:guava:33.0.0-android")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.webkit:webkit:1.10.0")
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
@@ -80,4 +81,5 @@ dependencies {
     testImplementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     testImplementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.robolectric:robolectric:4.11.1")
 }

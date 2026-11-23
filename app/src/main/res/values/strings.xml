@@ -1,20 +1,28 @@
 <resources>
     <string name="app_name">CarTube</string>
-    <string name="search_hint">Search YouTube</string>
+    <string name="search_hint">Search for a song or video</string>
+    <string name="search_prompt">Search and tap a result to play on the car</string>
+    <string name="search_no_results">No results — try different words</string>
+    <string name="tab_search">Search</string>
+    <string name="tab_queue">Queue</string>
+    <string name="play_now">Play now</string>
+    <string name="play_next">Play next</string>
+    <string name="add_to_queue">Add to queue</string>
+    <string name="added_play_next">Added — plays next</string>
+    <string name="added_to_queue">Added to queue</string>
+    <string name="clear_queue">Clear queue</string>
+    <string name="queue_empty">Queue is empty — search and tap Play now</string>
+    <string name="remove_from_queue">Remove</string>
+    <string name="link_added">Link added — playing now</string>
+    <string name="car_pick_on_phone">Pick a song on the phone</string>
     <string name="dismiss">Dismiss</string>
-    <string name="phone_hint">Browse YouTube on your phone. With Android Auto open, tap play — video goes to the car automatically.</string>
-    <string name="phone_watch_hint">Watch page open — use Play on car or the mini player controls.</string>
-    <string name="background_play_active">Background playback active — WebView is muted.</string>
-    <string name="notification_playing_phone">Playing in background on your phone</string>
+    <string name="notification_playing_phone">Playing audio on your phone</string>
     <string name="waiting_for_video">Waiting for a video from your phone…</string>
     <string name="parked_only_hint">For safety, use only while parked.</string>
     <string name="refresh">Refresh</string>
     <string name="car_template_error">Controls could not be shown. Playback may continue on the surface.</string>
-    <string name="now_playing_on_car">Now playing on Android Auto</string>
-    <string name="remote_playing_on_car">Now playing on car</string>
-    <string name="webview_silenced_hint">Phone player is muted — control playback below or on the head unit.</string>
     <string name="nothing_playing">Nothing playing</string>
-    <string name="mini_player_subtitle">CarTube</string>
+    <string name="mini_player_subtitle">CarTube remote</string>
     <string name="notification_channel_name">CarTube playback</string>
     <string name="notification_channel_desc">Shows when video is playing on Android Auto</string>
     <string name="notification_playing_on_car">Playing on your car screen</string>
@@ -27,5 +35,5 @@
     <string name="install_guide_intro">Android Auto blocks template (video surface) apps unless they are installed with Google Play as the installer package. Unknown sources does not fix this.</string>
     <string name="install_guide_windows_steps">Windows steps: enable USB debugging, connect phone, run platform-tools adb. Uninstall CarTube first. From the folder containing cartube-debug.apk run the command below. Full guide: docs/VIDEO_ON_CAR.md in the repo.</string>
     <string name="install_guide_shizuku_note">No PC? Use Shizuku plus UnknownAuto on the phone (GitHub) to install with Play attribution. Root not required on most devices.</string>
-    <string name="install_guide_after_install">After reinstall: Android Auto developer Unknown sources ON, Customize launcher, pick CarTube under apps/navigation (not Media only), then Send to car on the phone.</string>
+    <string name="install_guide_after_install">After reinstall: Android Auto developer Unknown sources ON, Customize launcher, pick CarTube under apps/navigation (not Media only).</string>
 </resources>
