@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">CarTube</string>
+    <string name="phone_hint">Browse YouTube on your phone. When you open or play a video, it appears on the car screen.</string>
+    <string name="waiting_for_video">Waiting for a video from your phone…</string>
+    <string name="parked_only_hint">For safety, use only while parked.</string>
+    <string name="send_to_car">Send to car</string>
+    <string name="now_playing_on_car">Now playing on Android Auto</string>
+</resources>
