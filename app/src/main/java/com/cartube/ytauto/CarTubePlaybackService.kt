@@ -493,6 +493,9 @@ class CarTubePlaybackService : MediaSessionService() {
             null
         }
         PlaybackController.attachPlayer(exo, item.title, item.videoId, mode, surfaceReady)
+        if (mode == PlaybackController.PlaybackMode.CAR) {
+            CarNavigationClaim.onPlaybackActive(item.title)
+        }
 
         if (mode == PlaybackController.PlaybackMode.CAR) {
             val surfaceOk = withTimeoutOrNull(12_000L) { surfaceReady?.await() } != null

@@ -64,16 +64,8 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
             result.sendResult(mutableListOf())
             return
         }
-        val description = MediaDescriptionCompat.Builder()
-            .setMediaId(ROOT_ID)
-            .setTitle(getString(R.string.app_name))
-            .setSubtitle(getString(R.string.search_prompt))
-            .build()
-        val rootItem = MediaBrowserCompat.MediaItem(
-            description,
-            MediaBrowserCompat.MediaItem.FLAG_BROWSABLE
-        )
-        result.sendResult(mutableListOf(rootItem))
+        // Do not advertise a browsable AA list (competes with NavigationTemplate entry).
+        result.sendResult(mutableListOf())
     }
 
     private fun syncPlaybackState() {

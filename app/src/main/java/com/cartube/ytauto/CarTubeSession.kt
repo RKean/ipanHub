@@ -15,6 +15,7 @@ class CarTubeSession : Session() {
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
+                CarNavigationClaim.detachCarContext()
                 PlaybackController.releaseCarSurface()
                 CarConnection.onSessionStopped()
             }
@@ -22,10 +23,6 @@ class CarTubeSession : Session() {
     }
 
     override fun onCreateScreen(intent: Intent): Screen {
-        return if (PlaybackController.hasActivePlayback) {
-            VideoPlayerScreen(carContext)
-        } else {
-            WaitingScreen(carContext)
-        }
+        return VideoPlayerScreen(carContext)
     }
 }

@@ -1,19 +1,41 @@
-# Android Auto split screen / Coolwalk
+# Android Auto split screen / Coolwalk / Waze
 
-## Symptom
+## Root cause (Tiggo 7 photo)
 
-On some head units (e.g. Chery Tiggo 7 PHEV, 2025), **video works full-screen** but not in **split dashboard** or **shrunk projection**.
+The head unit showed **“Search and tap a result to play on the car”** — that row came from the **legacy MediaBrowser** path, not the Car App **NavigationTemplate** surface. With **Waze** as active nav, Coolwalk kept Waze on the **map card** and ipanHub on a **side list card** with **no `ACCESS_SURFACE`**.
 
-## How AA works
+v1.3.4 changes entry to **navigation only** (`automotive_app_desc`: template + navigation, no media browse UI) and always opens **`VideoPlayerScreen`** = `NavigationTemplate` + `SurfaceCallback`.
 
-1. **Coolwalk split** — ipanHub is registered as a **navigation** app (NavigationTemplate + `ACCESS_SURFACE`). Video needs a **Surface** from `AppManager.setSurfaceCallback`.
-2. When another app owns the **navigation slot** (e.g. Google Maps), ipanHub may appear only as a **media card** with **no surface**. In that case **audio** can still play; the car UI shows *Video area unavailable* with instructions.
-3. **Smaller surface** — When ipanHub keeps the nav slot but the host shrinks the surface (split layout), the same `Surface` may be **resized** or **destroyed and recreated**. ipanHub **re-binds** ExoPlayer on every `onSurfaceAvailable`, `onVisibleAreaChanged`, and `onStableAreaChanged`, with **scale-to-fit** letterboxing (no minimum size).
+## Claiming the map card
+
+ipanHub calls:
+
+- `NavigationManager.navigationStarted()` when the car screen is visible and when playback starts in the car
+- `NavigationManager.updateTrip()` (and a 4s pulse while active)
+- `navigationEnded()` when playback stops or the car session ends
+
+**Can ipanHub keep the map while Waze relaunches?**
+
+**No — not reliably.** Android Auto allows **one active navigation app**. The host (Gearhead / head unit) arbitrates. If **Waze has an active route**, it can reclaim focus and the host calls **`onStopNavigation`** on ipanHub. Google’s navigation quality rules (NF-5) require ipanHub to **stop** acting as the active nav app when that happens — we cannot “fight” Waze in the background.
+
+### Most reliable workaround for users
+
+1. **End/cancel the Waze route** (Stop navigation), not only swipe Waze away — Waze often restarts the route and reclaims the map.
+2. Open **ipanHub from Navigation / map apps** in the AA launcher (not the old media browse list).
+3. On ipanHub, tap **Take map** if video is missing after Waze stole focus.
+4. Optional: **disable Waze in Android Auto** (phone: Android Auto → customize launcher) while using ipanHub video, or use Waze only on the phone screen.
+5. Start playback **after** ipanHub owns the map, or tap **Take map** again after starting.
 
 ## Debugging
 
-Phone menu → **Copy debug logs** → search for `[car] onSurfaceAvailable`, `onVisibleAreaChanged`, `[surface] attach`.
+Phone menu → **Copy debug logs** → filter `[nav]` and `[car] onSurfaceAvailable`.
 
-## DHU
+Expected when successful: `[nav] navigationStarted` then `[car] onSurfaceAvailable container=WxH`.
 
-Test with Desktop Head Unit: change display size and multi-pane / simulated split if your DHU build exposes it. Full-screen vs narrow window should both log new dimensions and `[surface] attach … size=WxH`.
+## DHU smoke test
+
+1. Desktop Head Unit, Coolwalk/multi-pane enabled.
+2. Start a fake “second nav” session if your DHU build supports it, or resize to split.
+3. Launch ipanHub car app; confirm logs show surface dimensions (e.g. `800x480` split vs full width).
+
+See also `docs/DHU_SPLIT_TEST.md`.

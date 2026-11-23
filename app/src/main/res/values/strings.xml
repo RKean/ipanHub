@@ -25,6 +25,13 @@
     <string name="car_pick_on_phone">Pick a song on the phone</string>
     <string name="car_surface_waiting_title">Video area unavailable</string>
     <string name="car_surface_split_hint">In Android Auto split view, the head unit may give ipanHub a media card without a video surface when another navigation app is active. Audio keeps playing. Open ipanHub full screen on the car display, or select ipanHub as the active navigation app in the launcher, to restore video.</string>
+    <string name="car_surface_idle_subtitle">Search on your phone, then play here</string>
+    <string name="car_map_help">Help</string>
+    <string name="car_take_map">Take map</string>
+    <string name="car_search_on_phone">Search on phone</string>
+    <string name="car_queue_count">Queue: %1$d</string>
+    <string name="back">Back</string>
+    <string name="car_fix_split_steps">1) End or cancel the Waze route (not only close Waze).\n2) In Android Auto settings, open ipanHub as a Navigation app (not Media).\n3) Tap Take map on ipanHub, or open ipanHub from the launcher before starting Waze again.\n\nAndroid Auto allows only one active navigation app. While Waze has a live route it can take the map card back automatically.</string>
     <string name="dismiss">Dismiss</string>
     <string name="notification_playing_phone">Playing audio on your phone</string>
     <string name="waiting_for_video">Waiting for a video from your phone…</string>
