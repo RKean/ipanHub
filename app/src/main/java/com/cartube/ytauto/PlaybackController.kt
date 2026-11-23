@@ -1,6 +1,7 @@
 package com.cartube.ytauto
 
 import android.view.Surface
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CompletableDeferred
@@ -32,8 +33,13 @@ object PlaybackController {
 
     private val surfaceLock = Any()
     private var carSurface: Surface? = null
+    private var carSurfaceWidth: Int = 0
+    private var carSurfaceHeight: Int = 0
+    private var carSurfaceDpi: Int = 0
     /** Surface currently passed to ExoPlayer — avoid redundant [ExoPlayer.setVideoSurface]. */
     private var surfaceBoundToPlayer: Surface? = null
+    private var surfaceBoundWidth: Int = -1
+    private var surfaceBoundHeight: Int = -1
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
     private var fanOutListener: Player.Listener? = null
 
@@ -74,6 +80,9 @@ object PlaybackController {
         notifyListeners()
     }
 
+    val hasCarSurface: Boolean
+        get() = synchronized(surfaceLock) { carSurface?.isValid == true }
+
     /**
      * Wire UI/car shell to the process player. Does **not** own or release ExoPlayer ([PlaybackEngine] does).
      */
@@ -93,6 +102,7 @@ object PlaybackController {
         title = videoTitle
         videoId = id
         surfaceReadySignal = onSurfaceReady
+        exo.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
 
         if (fanOutListener == null) {
             fanOutListener = object : Player.Listener {
@@ -118,39 +128,56 @@ object PlaybackController {
                         CarTubeLog.i("[surface] clear video (phone bg) ${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)}")
                         exo.clearVideoSurface()
                         surfaceBoundToPlayer = null
+                        surfaceBoundWidth = -1
+                        surfaceBoundHeight = -1
                     }
                 }
-                PlaybackMode.CAR -> applyCarSurfaceIfNeeded(exo)
+                PlaybackMode.CAR -> applyCarSurfaceIfNeeded(exo, force = false)
             }
         }
         notifyListeners()
     }
 
-    private fun applyCarSurfaceIfNeeded(exo: ExoPlayer) {
+    private fun applyCarSurfaceIfNeeded(exo: ExoPlayer, force: Boolean) {
         val surface = carSurface ?: return
         if (!surface.isValid) return
-        if (surfaceBoundToPlayer === surface) {
+        val sameSurface = surfaceBoundToPlayer === surface
+        val sameSize = surfaceBoundWidth == carSurfaceWidth && surfaceBoundHeight == carSurfaceHeight
+        if (!force && sameSurface && sameSize) {
             surfaceReadySignal?.complete(Unit)
             surfaceReadySignal = null
             return
         }
         CarTubeLog.i(
             "[surface] attach id=${CarTubeLog.surfaceIdentity(surface)} " +
-                "was=${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)}"
+                "was=${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)} " +
+                "size=${carSurfaceWidth}x${carSurfaceHeight} dpi=$carSurfaceDpi force=$force"
         )
+        exo.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
         exo.setVideoSurface(surface)
         surfaceBoundToPlayer = surface
+        surfaceBoundWidth = carSurfaceWidth
+        surfaceBoundHeight = carSurfaceHeight
         surfaceReadySignal?.complete(Unit)
         surfaceReadySignal = null
     }
 
-    fun attachCarSurface(surface: Surface) {
+    fun attachCarSurface(surface: Surface, width: Int, height: Int, dpi: Int) {
         synchronized(surfaceLock) {
-            if (carSurface !== surface) {
-                carSurface = surface
-            }
+            carSurface = surface
+            carSurfaceWidth = width
+            carSurfaceHeight = height
+            carSurfaceDpi = dpi
             if (playbackMode != PlaybackMode.CAR) return
-            player?.let { applyCarSurfaceIfNeeded(it) }
+            player?.let { applyCarSurfaceIfNeeded(it, force = false) }
+        }
+    }
+
+    /** After resize / visible-area change / resume — bind video output again (audio keeps playing). */
+    fun reattachCarSurfaceIfNeeded() {
+        synchronized(surfaceLock) {
+            if (playbackMode != PlaybackMode.CAR) return
+            player?.let { applyCarSurfaceIfNeeded(it, force = true) }
         }
     }
 
@@ -158,17 +185,25 @@ object PlaybackController {
         synchronized(surfaceLock) {
             if (surfaceBoundToPlayer != null) {
                 player?.clearVideoSurface()
-                CarTubeLog.i("[surface] release ${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)}")
+                CarTubeLog.i(
+                    "[surface] release ${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)} " +
+                        "was=${surfaceBoundWidth}x${surfaceBoundHeight}"
+                )
                 surfaceBoundToPlayer = null
+                surfaceBoundWidth = -1
+                surfaceBoundHeight = -1
             }
             carSurface = null
+            carSurfaceWidth = 0
+            carSurfaceHeight = 0
+            carSurfaceDpi = 0
             surfaceReadySignal = null
         }
     }
 
     @Deprecated("Use attachCarSurface / releaseCarSurface", ReplaceWith("releaseCarSurface()"))
     fun setCarSurface(surface: Surface?) {
-        if (surface == null) releaseCarSurface() else attachCarSurface(surface)
+        if (surface == null) releaseCarSurface() else attachCarSurface(surface, 0, 0, 0)
     }
 
     /** UI detach only — never release the process [ExoPlayer]. */
@@ -179,6 +214,8 @@ object PlaybackController {
             if (surfaceBoundToPlayer != null) {
                 player?.clearVideoSurface()
                 surfaceBoundToPlayer = null
+                surfaceBoundWidth = -1
+                surfaceBoundHeight = -1
             }
             carSurface = null
             title = ""
@@ -191,7 +228,7 @@ object PlaybackController {
         notifyListeners()
     }
 
-  @Deprecated("Use detachUiOnly", ReplaceWith("detachUiOnly()"))
+    @Deprecated("Use detachUiOnly", ReplaceWith("detachUiOnly()"))
     fun detachAndRelease() = detachUiOnly()
 
     val hasActivePlayback: Boolean

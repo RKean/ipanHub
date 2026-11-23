@@ -23,6 +23,8 @@
     <string name="remove_from_queue">Remove</string>
     <string name="link_added">Link added — playing now</string>
     <string name="car_pick_on_phone">Pick a song on the phone</string>
+    <string name="car_surface_waiting_title">Video area unavailable</string>
+    <string name="car_surface_split_hint">In Android Auto split view, the head unit may give ipanHub a media card without a video surface when another navigation app is active. Audio keeps playing. Open ipanHub full screen on the car display, or select ipanHub as the active navigation app in the launcher, to restore video.</string>
     <string name="dismiss">Dismiss</string>
     <string name="notification_playing_phone">Playing audio on your phone</string>
     <string name="waiting_for_video">Waiting for a video from your phone…</string>

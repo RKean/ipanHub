@@ -495,7 +495,10 @@ class CarTubePlaybackService : MediaSessionService() {
         PlaybackController.attachPlayer(exo, item.title, item.videoId, mode, surfaceReady)
 
         if (mode == PlaybackController.PlaybackMode.CAR) {
-            withTimeoutOrNull(4_000L) { surfaceReady?.await() }
+            val surfaceOk = withTimeoutOrNull(12_000L) { surfaceReady?.await() } != null
+            if (!surfaceOk) {
+                CarTubeLog.w("[service] car surface not ready in 12s — starting playback (audio); video when surface arrives")
+            }
         }
 
         CarTubeLog.i("[player] setMediaSource id=${item.videoId} reason=$reason items_before=${exo.mediaItemCount}")

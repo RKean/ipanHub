@@ -3,6 +3,7 @@ package com.cartube.ytauto
 import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -73,6 +74,8 @@ object PlaybackEngine {
                     .build(),
                 true
             )
+            @OptIn(UnstableApi::class)
+            run { exo.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT) }
             exoPlayer = exo
             CarTubeLog.i("[engine] ExoPlayer created ${playerHashLabel()}")
             return exo
