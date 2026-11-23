@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -16,7 +17,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var lastSentVideoId: String? = null
+    private var handoffInFlight = false
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -101,21 +102,56 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         unregisterReceiver(playbackErrorReceiver)
+        if (!handoffInFlight && !PlaybackController.hasActivePlayback) {
+            binding.webView.onPause()
+        }
         super.onStop()
     }
 
     override fun onPause() {
+        attemptWebViewBackgroundHandoff()
         super.onPause()
-        // Do not aggressively pause WebView while car playback runs; embedded video is silenced via JS.
-        if (!PlaybackController.hasActivePlayback) {
-            binding.webView.onPause()
-        }
     }
 
     override fun onResume() {
         binding.webView.onResume()
         refreshInstallBanner()
+        if (PlaybackController.isPhoneBackgroundPlayback) {
+            binding.statusText.text = getString(R.string.background_play_active)
+        }
         super.onResume()
+    }
+
+    private fun attemptWebViewBackgroundHandoff() {
+        if (PlaybackController.hasActivePlayback || handoffInFlight) return
+
+        val videoId = YouTubeUrlParser.extractVideoId(binding.webView.url.orEmpty()) ?: run {
+            binding.webView.onPause()
+            return
+        }
+        handoffInFlight = true
+        WebViewPlaybackHelper.readEmbeddedVideoState(binding.webView) { state ->
+            handoffInFlight = false
+            if (state.playing) {
+                Log.i(
+                    CarTubePlaybackService.TAG,
+                    "[handoff] phone background video=$videoId pos=${state.positionMs}"
+                )
+                ensureNotificationPermission()
+                CookieBridge.syncToNewPipe()
+                WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
+                val title = binding.webView.title ?: "YouTube"
+                YoutubePlayback.requestPhoneBackgroundPlay(
+                    applicationContext,
+                    videoId,
+                    title,
+                    state.positionMs
+                )
+                binding.statusText.text = getString(R.string.background_play_active)
+            } else {
+                binding.webView.onPause()
+            }
+        }
     }
 
     private fun refreshInstallBanner() {
@@ -168,19 +204,13 @@ class MainActivity : AppCompatActivity() {
                 CookieBridge.syncToNewPipe()
                 val videoId = YouTubeUrlParser.extractVideoId(url)
                 if (videoId != null) {
-                    statusText.text = getString(R.string.now_playing_on_car)
-                    maybeAutoSend(videoId, view.title ?: "YouTube")
+                    statusText.text = getString(R.string.phone_watch_hint)
                 } else {
                     statusText.text = getString(R.string.phone_hint)
                     lastSentVideoId = null
                 }
             }
         }
-    }
-
-    private fun maybeAutoSend(videoId: String, title: String) {
-        if (videoId == lastSentVideoId) return
-        sendVideoToCar(videoId, title)
     }
 
     private fun sendVideoToCar(videoId: String, title: String) {

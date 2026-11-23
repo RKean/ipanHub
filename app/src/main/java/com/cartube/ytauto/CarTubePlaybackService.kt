@@ -32,12 +32,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 
-/** Foreground [MediaSessionService] hosting ExoPlayer for Android Auto output. */
+/** Foreground [MediaSessionService] hosting ExoPlayer for Android Auto and phone background. */
 class CarTubePlaybackService : MediaSessionService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var playJob: Job? = null
     private var mediaSession: MediaSession? = null
+    private var activeMode = PlaybackController.PlaybackMode.CAR
+    private var pendingStartPositionMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -66,6 +68,12 @@ class CarTubePlaybackService : MediaSessionService() {
             ACTION_START_VIDEO -> {
                 val videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: return START_NOT_STICKY
                 val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+                activeMode = if (intent.getBooleanExtra(EXTRA_PHONE_BACKGROUND, false)) {
+                    PlaybackController.PlaybackMode.PHONE_BACKGROUND
+                } else {
+                    PlaybackController.PlaybackMode.CAR
+                }
+                pendingStartPositionMs = intent.getLongExtra(EXTRA_START_POSITION_MS, 0L)
                 beginForeground(title)
                 startVideoJob(videoId, title)
             }
@@ -105,7 +113,13 @@ class CarTubePlaybackService : MediaSessionService() {
                         return@launch
                     }
                     is YoutubeStreamResolver.ResolveResult.Ok ->
-                        playResolvedStream(resolved.stream, videoId, title)
+                        playResolvedStream(
+                            resolved.stream,
+                            videoId,
+                            title,
+                            activeMode,
+                            pendingStartPositionMs
+                        )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "[service] playback failed", e)
@@ -118,9 +132,11 @@ class CarTubePlaybackService : MediaSessionService() {
     private suspend fun playResolvedStream(
         stream: YoutubeStreamResolver.ResolvedStream,
         videoId: String,
-        title: String
+        title: String,
+        mode: PlaybackController.PlaybackMode,
+        startPositionMs: Long
     ) {
-        Log.i(TAG, "[service] stream ${stream.via}")
+        Log.i(TAG, "[service] mode=$mode stream=${stream.via} seek=$startPositionMs")
 
         val cookies = NewPipeDownloader.getInstance().cookies
         val userAgent = NewPipeDownloader.DEFAULT_USER_AGENT
@@ -182,14 +198,23 @@ class CarTubePlaybackService : MediaSessionService() {
         mediaSession?.release()
         mediaSession = MediaSession.Builder(this, exo).setId(TAG).build()
 
-        val surfaceReady = CompletableDeferred<Unit>()
-        PlaybackController.attachPlayer(exo, displayTitle, videoId, surfaceReady)
+        val surfaceReady = if (mode == PlaybackController.PlaybackMode.CAR) {
+            CompletableDeferred<Unit>()
+        } else {
+            null
+        }
+        PlaybackController.attachPlayer(exo, displayTitle, videoId, mode, surfaceReady)
 
-        val gotSurface = withTimeoutOrNull(4_000L) { surfaceReady.await() } != null
-        Log.i(TAG, "[service] car surface ready=$gotSurface")
+        if (mode == PlaybackController.PlaybackMode.CAR) {
+            val gotSurface = withTimeoutOrNull(4_000L) { surfaceReady?.await() } != null
+            Log.i(TAG, "[service] car surface ready=$gotSurface")
+        }
 
         exo.setMediaSource(mediaSource)
         exo.prepare()
+        if (startPositionMs > 0) {
+            exo.seekTo(startPositionMs)
+        }
         exo.play()
         updateNotification()
     }
@@ -206,6 +231,11 @@ class CarTubePlaybackService : MediaSessionService() {
         val playing = PlaybackController.player?.isPlaying == true
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(title, playing))
+    }
+
+    private fun notificationBody(): String = when (PlaybackController.playbackMode) {
+        PlaybackController.PlaybackMode.PHONE_BACKGROUND -> getString(R.string.notification_playing_phone)
+        PlaybackController.PlaybackMode.CAR -> getString(R.string.notification_playing_on_car)
     }
 
     private fun broadcastError(message: String) {
@@ -253,10 +283,11 @@ class CarTubePlaybackService : MediaSessionService() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
-            .setContentText(getString(R.string.notification_playing_on_car))
+            .setContentText(notificationBody())
             .setContentIntent(contentIntent)
             .setOngoing(playing)
             .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(actionIcon, actionTitle, mediaAction)
             .addAction(R.drawable.ic_stop, getString(R.string.notification_stop), stopAction)
             .setStyle(
@@ -280,12 +311,35 @@ class CarTubePlaybackService : MediaSessionService() {
         const val EXTRA_VIDEO_ID = "video_id"
         const val EXTRA_TITLE = "title"
         const val EXTRA_ERROR_MESSAGE = "error_message"
+        const val EXTRA_PHONE_BACKGROUND = "phone_background"
+        const val EXTRA_START_POSITION_MS = "start_position_ms"
 
-        fun startPlayback(context: android.content.Context, videoId: String, title: String) {
+        fun startCarPlayback(context: android.content.Context, videoId: String, title: String) {
+            startInternal(context, videoId, title, phoneBackground = false, startPositionMs = 0L)
+        }
+
+        fun startPhoneBackgroundPlayback(
+            context: android.content.Context,
+            videoId: String,
+            title: String,
+            startPositionMs: Long
+        ) {
+            startInternal(context, videoId, title, phoneBackground = true, startPositionMs)
+        }
+
+        private fun startInternal(
+            context: android.content.Context,
+            videoId: String,
+            title: String,
+            phoneBackground: Boolean,
+            startPositionMs: Long
+        ) {
             val intent = Intent(context, CarTubePlaybackService::class.java).apply {
                 action = ACTION_START_VIDEO
                 putExtra(EXTRA_VIDEO_ID, videoId)
                 putExtra(EXTRA_TITLE, title)
+                putExtra(EXTRA_PHONE_BACKGROUND, phoneBackground)
+                putExtra(EXTRA_START_POSITION_MS, startPositionMs.coerceAtLeast(0L))
             }
             ContextCompat.startForegroundService(context, intent)
         }

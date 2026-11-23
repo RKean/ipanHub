@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">CarTube</string>
-    <string name="phone_hint">Browse YouTube on your phone. When you open or play a video, it appears on the car screen.</string>
+    <string name="phone_hint">Browse YouTube on your phone. Play a video, then minimize — audio continues in the background. Tap Send to car for Android Auto.</string>
+    <string name="phone_watch_hint">Playing in browser — minimize or lock screen to keep audio (background player). Tap Send to car for the head unit.</string>
+    <string name="background_play_active">Playing in background — use the notification or headset controls.</string>
+    <string name="notification_playing_phone">Playing in background on your phone</string>
     <string name="waiting_for_video">Waiting for a video from your phone…</string>
     <string name="parked_only_hint">For safety, use only while parked.</string>
     <string name="send_to_car">Send to car</string>

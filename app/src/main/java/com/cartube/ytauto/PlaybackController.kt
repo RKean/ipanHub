@@ -6,6 +6,15 @@ import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.CopyOnWriteArrayList
 
 object PlaybackController {
+
+    enum class PlaybackMode {
+        CAR,
+        PHONE_BACKGROUND,
+    }
+
+    var playbackMode: PlaybackMode = PlaybackMode.CAR
+        private set
+
     var player: ExoPlayer? = null
         private set
     var title: String = ""
@@ -41,11 +50,11 @@ object PlaybackController {
         playbackListeners.forEach { it.invoke() }
     }
 
-    /** Called by [CarTubePlaybackService] only. */
     fun attachPlayer(
         exo: ExoPlayer,
         videoTitle: String,
         id: String,
+        mode: PlaybackMode,
         onSurfaceReady: CompletableDeferred<Unit>? = null
     ) {
         val previous = player
@@ -53,6 +62,7 @@ object PlaybackController {
             previous.clearVideoSurface()
             previous.release()
         }
+        playbackMode = mode
         player = exo
         title = videoTitle
         videoId = id
@@ -66,6 +76,7 @@ object PlaybackController {
     }
 
     fun setCarSurface(surface: Surface?) {
+        if (playbackMode == PlaybackMode.PHONE_BACKGROUND) return
         carSurface = surface
         if (surface != null) {
             player?.setVideoSurface(surface)
@@ -82,10 +93,14 @@ object PlaybackController {
         player = null
         title = ""
         videoId = ""
+        playbackMode = PlaybackMode.CAR
         surfaceReadySignal = null
         notifyListeners()
     }
 
     val hasActivePlayback: Boolean
         get() = player != null
+
+    val isPhoneBackgroundPlayback: Boolean
+        get() = hasActivePlayback && playbackMode == PlaybackMode.PHONE_BACKGROUND
 }

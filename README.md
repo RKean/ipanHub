@@ -47,7 +47,13 @@ The phone app shows an orange/green **install banner** and an in-app guide (tap 
 2. **Customize launcher** → check CarTube.
 3. Reboot phone + reconnect USB/wireless AA if the app list is stale.
 
-## Features (v1.0.3)
+## Phone background playback (v1.0.4)
+
+When you play a video in the WebView and **leave the app or lock the screen**, CarTube **hands off** to the foreground player at the current position (like Premium background play). Use the media notification or Bluetooth headset buttons.
+
+**Tips if audio stops on your OEM phone:** Settings → Apps → CarTube → Battery → **Unrestricted** (disable aggressive optimization).
+
+## Features (v1.0.4)
 
 - NewPipe **v0.26.5** stream resolution + InnerTube fallback
 - Foreground **MediaSessionService** playback (survives phone home/screen off)
