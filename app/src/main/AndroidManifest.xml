@@ -2,12 +2,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />
     <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
+
+    <queries>
+        <intent>
+            <action android:name="androidx.car.app.CarAppService" />
+        </intent>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+        <package android:name="com.google.android.projection.gearhead" />
+    </queries>
 
     <application
         android:name=".CarTubeApp"
         android:allowBackup="true"
+        android:appCategory="video"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -27,19 +40,51 @@
             </intent-filter>
         </activity>
 
+        <!-- Car App Library: video on NavigationTemplate surface -->
         <service
             android:name=".CarTubeCarAppService"
             android:exported="true"
-            android:label="@string/app_name">
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.NAVIGATION" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.car.app.action.NAVIGATE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="geo" />
+            </intent-filter>
         </service>
+
+        <!-- Media browser: required for sideloaded discovery on many Android Auto builds -->
+        <service
+            android:name=".CarTubeMediaBrowserService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name="androidx.media.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
 
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
-            android:value="2" />
+            android:value="1" />
+
+        <meta-data
+            android:name="androidx.car.app.CarAppMetadataHolderService.CAR_APP_SERVICE"
+            android:value=".CarTubeCarAppService" />
 
         <meta-data
             android:name="com.google.android.gms.car.application"

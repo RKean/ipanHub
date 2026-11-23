@@ -3,6 +3,7 @@ package com.cartube.ytauto
 import android.view.Surface
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CompletableDeferred
+import java.util.concurrent.CopyOnWriteArrayList
 
 object PlaybackController {
     var player: ExoPlayer? = null
@@ -12,9 +13,37 @@ object PlaybackController {
     private var carSurface: Surface? = null
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
 
-    var playbackListener: (() -> Unit)? = null
+    private val playbackListeners = CopyOnWriteArrayList<() -> Unit>()
 
-    fun setPlayer(exo: ExoPlayer, videoTitle: String, id: String, onSurfaceReady: CompletableDeferred<Unit>? = null) {
+    var playbackListener: (() -> Unit)?
+        get() = null
+        set(listener) {
+            if (listener == null) {
+                playbackListeners.clear()
+            } else {
+                playbackListeners.clear()
+                playbackListeners.add(listener)
+            }
+        }
+
+    fun addPlaybackListener(listener: () -> Unit) {
+        playbackListeners.addIfAbsent(listener)
+    }
+
+    fun removePlaybackListener(listener: () -> Unit) {
+        playbackListeners.remove(listener)
+    }
+
+    private fun notifyListeners() {
+        playbackListeners.forEach { it.invoke() }
+    }
+
+    fun setPlayer(
+        exo: ExoPlayer,
+        videoTitle: String,
+        id: String,
+        onSurfaceReady: CompletableDeferred<Unit>? = null
+    ) {
         releasePlayerOnly()
         player = exo
         title = videoTitle
@@ -25,7 +54,7 @@ object PlaybackController {
             surfaceReadySignal?.complete(Unit)
             surfaceReadySignal = null
         }
-        playbackListener?.invoke()
+        notifyListeners()
     }
 
     fun setCarSurface(surface: Surface?) {
@@ -46,7 +75,7 @@ object PlaybackController {
         title = ""
         videoId = ""
         surfaceReadySignal = null
-        playbackListener?.invoke()
+        notifyListeners()
     }
 
     fun releaseAll() {

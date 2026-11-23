@@ -53,6 +53,16 @@ Sideloaded car apps are **hidden** until developer mode is on.
 
 Keep this on after AA updates, or CarTube may disappear from the car launcher.
 
+**Why Unknown sources alone often fails for Car App Library apps:** On many Android Auto versions (17+), the host validator whitelists **media** / **navigation** sideloads but **not** `template` apps. CarTube therefore registers a **MediaBrowserService** (`automotive_app_desc` includes `<uses name="media" />`) so the package is accepted when sideloaded. Video still uses the **navigation** `CarAppService` + surface.
+
+### 1b) Customize launcher (phone)
+
+1. With the car disconnected or connected, open **Android Auto** on the phone → **Settings**.
+2. Open **Customize launcher** (sometimes under **Connection preferences**).
+3. Ensure **CarTube** is **checked** for the main screen. On some builds it appears under **Media** first; you can still pin it to the launcher grid.
+
+If CarTube is missing from this list after reinstalling the APK, reboot the phone and open Android Auto once before reconnecting USB/wireless AA.
+
 ### 2) Connect the car
 
 - **Wired USB:** use a data-capable cable; accept Android Auto on the phone.
@@ -61,7 +71,7 @@ Keep this on after AA updates, or CarTube may disappear from the car launcher.
 ### 3) Launch on the head unit
 
 1. Open the Android Auto app list on the Chery display.
-2. Select **CarTube** (navigation icon).
+2. Select **CarTube** (launcher or **Media** section; navigation icon when using the car UI).
 3. On the phone, open a YouTube video — playback should start on the car after a short “Loading” period.
 
 If video is black but audio works, reopen CarTube on the head unit so the surface is recreated.
