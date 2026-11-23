@@ -18,8 +18,9 @@ object WebViewPlaybackHelper {
 
     const val JS_INSTALL_PLAY_HOOK = """
         (function(){
+          if (!window._cartubeMuting) window._cartubeMuting = false;
           function notify(v) {
-            if (!v) return;
+            if (!v || window._cartubeMuting) return;
             try {
               CarTubeBridge.onVideoPlay(Math.floor((v.currentTime||0)*1000));
             } catch(e) {}
@@ -56,12 +57,14 @@ object WebViewPlaybackHelper {
         webView.evaluateJavascript(
             """
             (function(){
+              window._cartubeMuting = true;
               var nodes = document.querySelectorAll('video');
               for (var i = 0; i < nodes.length; i++) {
                 nodes[i].pause();
                 nodes[i].muted = true;
                 nodes[i].volume = 0;
               }
+              setTimeout(function(){ window._cartubeMuting = false; }, 1200);
             })();
             """.trimIndent(),
             null

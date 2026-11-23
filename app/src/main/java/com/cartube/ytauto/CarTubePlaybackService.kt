@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,23 +32,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import kotlin.math.abs
 
 /** Foreground [MediaSessionService] hosting ExoPlayer for Android Auto and phone background. */
 class CarTubePlaybackService : MediaSessionService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var playJob: Job? = null
+    private var hostPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private var activeMode = PlaybackController.PlaybackMode.CAR
     private var pendingStartPositionMs = 0L
+    private var resolvingVideoId: String? = null
+    private var lastFailedVideoId: String? = null
+    private var lastErrorBroadcastMs = 0L
+
+    private val sessionCallback = object : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        ensureSessionAndPlayer()
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-        mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        ensureSessionAndPlayer()
+        return mediaSession
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -58,11 +76,11 @@ class CarTubePlaybackService : MediaSessionService() {
                 return START_NOT_STICKY
             }
             ACTION_MEDIA_PAUSE -> {
-                PlaybackController.player?.pause()
+                hostPlayer?.pause()
                 updateNotification()
             }
             ACTION_MEDIA_PLAY -> {
-                PlaybackController.player?.play()
+                hostPlayer?.play()
                 updateNotification()
             }
             ACTION_START_VIDEO -> {
@@ -74,6 +92,9 @@ class CarTubePlaybackService : MediaSessionService() {
                     PlaybackController.PlaybackMode.CAR
                 }
                 pendingStartPositionMs = intent.getLongExtra(EXTRA_START_POSITION_MS, 0L)
+                if (handleDuplicateStartRequest(videoId, pendingStartPositionMs)) {
+                    return START_STICKY
+                }
                 beginForeground(title)
                 startVideoJob(videoId, title)
             }
@@ -88,6 +109,71 @@ class CarTubePlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
+    private fun ensureSessionAndPlayer() {
+        if (hostPlayer != null && mediaSession != null) return
+        val trackSelector = DefaultTrackSelector(this).apply {
+            setParameters(
+                buildUponParameters()
+                    .setMaxVideoSize(1280, 720)
+                    .setMaxVideoBitrate(5_000_000)
+                    .build()
+            )
+        }
+        val exo = ExoPlayer.Builder(this)
+            .setTrackSelector(trackSelector)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+        exo.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            true
+        )
+        exo.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                val detail = error.cause?.message ?: error.message
+                Log.e(TAG, "[service] ExoPlayer error: $detail", error)
+                broadcastErrorOnce(
+                    PlaybackController.videoId,
+                    "Playback failed: ${detail?.take(120) ?: "unknown"}"
+                )
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) = updateNotification()
+
+            override fun onPlaybackStateChanged(playbackState: Int) = updateNotification()
+        })
+        hostPlayer = exo
+        mediaSession = MediaSession.Builder(this, exo)
+            .setId(TAG)
+            .setCallback(sessionCallback)
+            .build()
+        Log.i(TAG, "[service] MediaSession ready for controllers")
+    }
+
+    private fun handleDuplicateStartRequest(videoId: String, seekMs: Long): Boolean {
+        val currentId = PlaybackController.videoId
+        val player = hostPlayer
+        if (resolvingVideoId == videoId) {
+            Log.i(TAG, "[service] skip duplicate — already resolving $videoId")
+            return true
+        }
+        if (currentId == videoId && player != null && PlaybackController.hasActivePlayback) {
+            val pos = player.currentPosition
+            if (abs(pos - seekMs) < 3_000) {
+                Log.i(TAG, "[service] skip duplicate — already on $videoId at ${pos}ms")
+                if (!player.isPlaying) player.play()
+                return true
+            }
+            Log.i(TAG, "[service] re-seek same video $videoId → $seekMs")
+            player.seekTo(seekMs)
+            player.play()
+            return true
+        }
+        return false
+    }
+
     private fun beginForeground(title: String) {
         ServiceCompat.startForeground(
             this,
@@ -100,6 +186,7 @@ class CarTubePlaybackService : MediaSessionService() {
     private fun startVideoJob(videoId: String, title: String) {
         playJob?.cancel()
         playJob = serviceScope.launch {
+            resolvingVideoId = videoId
             try {
                 val resolved = withContext(Dispatchers.IO) {
                     YoutubeStreamResolver.resolveVideoId(videoId, applyWebViewCookies = true)
@@ -108,7 +195,7 @@ class CarTubePlaybackService : MediaSessionService() {
                     is YoutubeStreamResolver.ResolveResult.Err -> {
                         val msg = YoutubeStreamResolver.formatUserError(resolved)
                         Log.e(TAG, "[service] $msg", resolved.cause)
-                        broadcastError(msg)
+                        broadcastErrorOnce(videoId, msg)
                         stopSelf()
                         return@launch
                     }
@@ -121,12 +208,38 @@ class CarTubePlaybackService : MediaSessionService() {
                             pendingStartPositionMs
                         )
                 }
+            } catch (_: CancellationException) {
+                Log.i(TAG, "[service] resolve cancelled for $videoId (superseded)")
             } catch (e: Exception) {
                 Log.e(TAG, "[service] playback failed", e)
-                broadcastError("Playback setup failed: ${e.message?.take(120)}")
-                stopSelf()
+                val msg = userMessageFor(e)
+                if (msg.isNotBlank()) {
+                    broadcastErrorOnce(videoId, msg)
+                    stopSelf()
+                }
+            } finally {
+                if (resolvingVideoId == videoId) resolvingVideoId = null
             }
         }
+    }
+
+    private fun userMessageFor(e: Exception): String {
+        val name = e.javaClass.simpleName
+        if (name.contains("Cancellation", ignoreCase = true)) return ""
+        return "Playback setup failed: ${e.message?.take(120) ?: name}"
+    }
+
+    private fun broadcastErrorOnce(videoId: String, message: String) {
+        if (message.isBlank()) return
+        val now = System.currentTimeMillis()
+        if (videoId == lastFailedVideoId && now - lastErrorBroadcastMs < 5_000) return
+        lastFailedVideoId = videoId
+        lastErrorBroadcastMs = now
+        sendBroadcast(
+            Intent(ACTION_PLAYBACK_ERROR)
+                .setPackage(packageName)
+                .putExtra(EXTRA_ERROR_MESSAGE, message)
+        )
     }
 
     private suspend fun playResolvedStream(
@@ -137,6 +250,8 @@ class CarTubePlaybackService : MediaSessionService() {
         startPositionMs: Long
     ) {
         Log.i(TAG, "[service] mode=$mode stream=${stream.via} seek=$startPositionMs")
+        ensureSessionAndPlayer()
+        val exo = hostPlayer ?: return
 
         val cookies = NewPipeDownloader.getInstance().cookies
         val userAgent = NewPipeDownloader.DEFAULT_USER_AGENT
@@ -150,53 +265,8 @@ class CarTubePlaybackService : MediaSessionService() {
             }
         )
 
-        val trackSelector = DefaultTrackSelector(this).apply {
-            setParameters(
-                buildUponParameters()
-                    .setMaxVideoSize(1280, 720)
-                    .setMaxVideoBitrate(4_000_000)
-                    .build()
-            )
-        }
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(this)
-            .setDataSourceFactory(dataSourceFactory)
-
-        val exo = ExoPlayer.Builder(this)
-            .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build()
-
-        exo.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(),
-            true
-        )
-
         val mediaSource = YoutubePlayback.buildMediaSource(dataSourceFactory, stream)
         val displayTitle = title.ifBlank { "YouTube" }
-
-        exo.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                val detail = error.cause?.message ?: error.message
-                Log.e(TAG, "[service] ExoPlayer error: $detail", error)
-                broadcastError("Playback failed: ${detail?.take(120) ?: "unknown"}")
-            }
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                updateNotification()
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                updateNotification()
-            }
-        })
-
-        mediaSession?.release()
-        mediaSession = MediaSession.Builder(this, exo).setId(TAG).build()
 
         val surfaceReady = if (mode == PlaybackController.PlaybackMode.CAR) {
             CompletableDeferred<Unit>()
@@ -220,15 +290,19 @@ class CarTubePlaybackService : MediaSessionService() {
     }
 
     private fun stopPlayback() {
+        playJob?.cancel()
+        playJob = null
+        resolvingVideoId = null
+        PlaybackController.detachAndRelease()
         mediaSession?.release()
         mediaSession = null
-        PlaybackController.detachAndRelease()
+        hostPlayer = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     }
 
     private fun updateNotification() {
         val title = PlaybackController.title.ifBlank { getString(R.string.app_name) }
-        val playing = PlaybackController.player?.isPlaying == true
+        val playing = hostPlayer?.isPlaying == true
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(title, playing))
     }
@@ -236,14 +310,6 @@ class CarTubePlaybackService : MediaSessionService() {
     private fun notificationBody(): String = when (PlaybackController.playbackMode) {
         PlaybackController.PlaybackMode.PHONE_BACKGROUND -> getString(R.string.notification_playing_phone)
         PlaybackController.PlaybackMode.CAR -> getString(R.string.notification_playing_on_car)
-    }
-
-    private fun broadcastError(message: String) {
-        sendBroadcast(
-            Intent(ACTION_PLAYBACK_ERROR)
-                .setPackage(packageName)
-                .putExtra(EXTRA_ERROR_MESSAGE, message)
-        )
     }
 
     private fun createNotificationChannel() {

@@ -47,6 +47,8 @@ class MainActivity : AppCompatActivity() {
     private var handoffInFlight = false
     private var userSeeking = false
     private var suppressWebViewPlayHook = false
+    private var lastAutoCarVideoId: String? = null
+    private var lastAutoCarAtMs = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     private val playBridge = WebViewPlaybackHelper.PlayBridge { pos -> onWebViewVideoPlay(pos) }
 
@@ -95,7 +97,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val uiSyncListener = { refreshMiniPlayerUi() }
+    private val uiSyncListener = {
+        refreshMiniPlayerUi()
+        PlaybackClient.ensureConnected(applicationContext)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -187,33 +192,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun routePlaybackToCar(videoId: String, title: String, positionMs: Long) {
-        if (handoffInFlight) return
-        handoffInFlight = true
-        ensureNotificationPermission()
-        CookieBridge.syncToNewPipe()
-        suppressWebViewPlayHook = true
-        WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
+        if (suppressWebViewPlayHook) return
+        val now = System.currentTimeMillis()
+        if (videoId == lastAutoCarVideoId && now - lastAutoCarAtMs < 1_000) return
 
         if (videoId == PlaybackController.videoId && PlaybackController.hasActivePlayback &&
             PlaybackController.playbackMode == PlaybackController.PlaybackMode.CAR
         ) {
+            val current = PlaybackClient.positionMs()
+            if (kotlin.math.abs(current - positionMs) < 3_000 && PlaybackClient.isPlaying()) {
+                return
+            }
             PlaybackClient.seekTo(positionMs)
             PlaybackClient.play()
             lastSentVideoId = videoId
-            handoffInFlight = false
-            suppressWebViewPlayHook = false
-            refreshMiniPlayerUi()
             return
         }
 
+        ensureNotificationPermission()
+        CookieBridge.syncToNewPipe()
+        suppressWebViewPlayHook = true
+        WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
+        mainHandler.postDelayed({ suppressWebViewPlayHook = false }, 1_500)
+
+        lastAutoCarVideoId = videoId
+        lastAutoCarAtMs = now
         lastSentVideoId = videoId
         YoutubePlayback.requestPlayOnCar(applicationContext, videoId, title, positionMs)
         ThumbnailLoader.loadYouTubeThumbnail(videoId, miniThumb)
         binding.carRemoteOverlay.isVisible = true
         binding.remoteTitle.text = title
         Log.i(CarTubePlaybackService.TAG, "[auto-car] video=$videoId pos=$positionMs session=active")
-        handoffInFlight = false
-        suppressWebViewPlayHook = false
     }
 
     private fun performSearch(query: String) {

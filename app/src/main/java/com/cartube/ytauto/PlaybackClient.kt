@@ -2,6 +2,8 @@ package com.cartube.ytauto
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -17,24 +19,44 @@ object PlaybackClient {
 
     const val TAG = "CarTube"
 
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
+    private var connectAttempts = 0
     private val uiListeners = CopyOnWriteArrayList<() -> Unit>()
 
     fun connect(context: Context) {
+        connectAttempts = 0
+        attemptConnect(context.applicationContext)
+    }
+
+    fun ensureConnected(context: Context) {
         if (mediaController != null) return
-        val token = SessionToken(context, ComponentName(context, CarTubePlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        attemptConnect(context.applicationContext)
+    }
+
+    private fun attemptConnect(context: Context) {
+        if (mediaController != null) return
+        val appContext = context.applicationContext
+        val token = SessionToken(appContext, ComponentName(appContext, CarTubePlaybackService::class.java))
+        val future = MediaController.Builder(appContext, token).buildAsync()
         controllerFuture = future
         future.addListener(
             {
                 try {
                     mediaController = future.get()
                     mediaController?.addListener(controllerListener)
+                    connectAttempts = 0
                     Log.i(TAG, "[client] MediaController connected")
                     notifyUi()
                 } catch (e: Exception) {
-                    Log.e(TAG, "[client] MediaController failed", e)
+                    Log.w(TAG, "[client] MediaController failed (attempt=${connectAttempts + 1})", e)
+                    controllerFuture = null
+                    if (connectAttempts < 12) {
+                        connectAttempts++
+                        val delay = (300L * connectAttempts).coerceAtMost(3_000L)
+                        mainHandler.postDelayed({ attemptConnect(appContext) }, delay)
+                    }
                 }
             },
             MoreExecutors.directExecutor()
@@ -43,10 +65,12 @@ object PlaybackClient {
 
     @Suppress("UNUSED_PARAMETER")
     fun disconnect(context: Context) {
+        mainHandler.removeCallbacksAndMessages(null)
         mediaController?.removeListener(controllerListener)
         val future = controllerFuture
         mediaController = null
         controllerFuture = null
+        connectAttempts = 0
         if (future != null) {
             MediaController.releaseFuture(future)
         }

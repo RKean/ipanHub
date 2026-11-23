@@ -61,8 +61,30 @@ object PlaybackController {
         onSurfaceReady: CompletableDeferred<Unit>? = null
     ) {
         val previous = player
+        if (previous === exo) {
+            playbackMode = mode
+            title = videoTitle
+            videoId = id
+            surfaceReadySignal = onSurfaceReady
+            synchronized(surfaceLock) {
+                when (mode) {
+                    PlaybackMode.PHONE_BACKGROUND -> exo.clearVideoSurface()
+                    PlaybackMode.CAR -> {
+                        val surface = carSurface
+                        if (surface != null && surface.isValid) {
+                            exo.setVideoSurface(surface)
+                            surfaceReadySignal?.complete(Unit)
+                            surfaceReadySignal = null
+                        }
+                    }
+                }
+            }
+            notifyListeners()
+            return
+        }
+
         fanOutListener?.let { listener -> previous?.removeListener(listener) }
-        if (previous != null && previous !== exo) {
+        if (previous != null) {
             synchronized(surfaceLock) {
                 previous.clearVideoSurface()
             }

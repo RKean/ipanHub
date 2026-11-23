@@ -193,12 +193,23 @@ object YoutubeStreamResolver {
                 "audio=${audio.size} hls=${!hls.isNullOrBlank()} dash=${!dash.isNullOrBlank()}"
         )
 
-        pickMuxed(muxed)?.let {
+        pickMerge(videoOnly, audio)?.let { (vStream, aStream) ->
+            return ResolvedStream(
+                StreamKind.MERGED_PROGRESSIVE,
+                vStream.content,
+                secondaryUrl = aStream.content,
+                mimeType = null,
+                via = "$source/merge-${vStream.height}p+h264"
+            )
+        }
+
+        pickMuxed(muxed)?.let { picked ->
+            val height = muxed.filter { it.content == picked }.maxOfOrNull { it.height } ?: 0
             return ResolvedStream(
                 StreamKind.PROGRESSIVE_MUXED,
-                it,
+                picked,
                 mimeType = null,
-                via = "$source/muxed-${muxed.maxOfOrNull { v -> v.height } ?: 0}p"
+                via = "$source/muxed-${height}p"
             )
         }
 
@@ -208,16 +219,6 @@ object YoutubeStreamResolver {
                 hls,
                 mimeType = MimeTypes.APPLICATION_M3U8,
                 via = "$source/hls"
-            )
-        }
-
-        pickMerge(videoOnly, audio)?.let { (v, a) ->
-            return ResolvedStream(
-                StreamKind.MERGED_PROGRESSIVE,
-                v,
-                secondaryUrl = a,
-                mimeType = null,
-                via = "$source/merge"
             )
         }
 
@@ -247,17 +248,32 @@ object YoutubeStreamResolver {
     private fun pickMerge(
         videoOnly: List<VideoStream>,
         audio: List<AudioStream>
-    ): Pair<String, String>? {
-        val v = videoOnly
-            .filter { it.content.isNotBlank() }
-            .sortedBy { it.height }
-            .firstOrNull { it.height in 240..720 }
-            ?: videoOnly.filter { it.content.isNotBlank() }.minByOrNull { it.height }
+    ): Pair<VideoStream, AudioStream>? {
+        val v = pickVideoOnlyForMerge(videoOnly) ?: return null
         val a = audio
             .filter { it.content.isNotBlank() }
             .maxByOrNull { it.averageBitrate }
-        if (v == null || a == null) return null
-        return v.content to a.content
+            ?: return null
+        return v to a
+    }
+
+    private fun pickVideoOnlyForMerge(streams: List<VideoStream>): VideoStream? {
+        val candidates = streams.filter { it.content.isNotBlank() && it.height in 144..720 }
+        if (candidates.isEmpty()) return null
+        return candidates.sortedWith(
+            compareByDescending<VideoStream> { h264PreferenceScore(it) }
+                .thenByDescending { it.height }
+        ).firstOrNull()
+    }
+
+    private fun h264PreferenceScore(stream: VideoStream): Int {
+        val mime = runCatching { stream.format?.mimeType }.getOrNull().orEmpty().lowercase()
+        return when {
+            mime.contains("avc") || mime.contains("h264") -> 100
+            mime.contains("vp9") || mime.contains("av01") -> 10
+            mime.contains("mp4") -> 70
+            else -> 40
+        }
     }
 
     private inline fun safeString(block: () -> String?): String? = runCatching { block() }.getOrNull()
