@@ -16,6 +16,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,6 +80,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupWebView(binding.webView, binding.progressBar, binding.statusText)
+        binding.installBanner.setOnClickListener {
+            startActivity(Intent(this, InstallGuideActivity::class.java))
+        }
         if (savedInstanceState == null) {
             binding.webView.loadUrl("https://m.youtube.com")
         }
@@ -110,7 +114,25 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         binding.webView.onResume()
+        refreshInstallBanner()
         super.onResume()
+    }
+
+    private fun refreshInstallBanner() {
+        val trusted = AaInstallTrust.isTrustedForTemplateVideo(this)
+        binding.installBanner.visibility = android.view.View.VISIBLE
+        binding.installBanner.text = if (trusted) {
+            getString(R.string.install_banner_trusted)
+        } else {
+            getString(R.string.install_banner_untrusted)
+        }
+        binding.installBanner.setBackgroundColor(
+            if (trusted) 0xFFE8F5E9.toInt() else 0xFFFFF3E0.toInt()
+        )
+        binding.installBanner.setTextColor(
+            if (trusted) 0xFF2E7D32.toInt() else 0xFFE65100.toInt()
+        )
+        Log.i(AaInstallTrust.TAG, "[install] ${AaInstallTrust.modeDescription(this)}")
     }
 
     @SuppressLint("SetJavaScriptEnabled")

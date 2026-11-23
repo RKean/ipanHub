@@ -7,6 +7,20 @@
     android:layout_height="match_parent">
 
     <TextView
+        android:id="@+id/installBanner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#FFF3E0"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
+        android:textColor="#E65100"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
         android:id="@+id/statusText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -14,9 +28,9 @@
         android:paddingTop="8dp"
         android:text="@string/phone_hint"
         android:textSize="13sp"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/sendToCarButton"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/installBanner" />
 
     <Button
         android:id="@+id/sendToCarButton"

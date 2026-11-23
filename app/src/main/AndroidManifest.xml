@@ -17,6 +17,7 @@
             <action android:name="android.media.browse.MediaBrowserService" />
         </intent>
         <package android:name="com.google.android.projection.gearhead" />
+        <package android:name="com.android.vending" />
     </queries>
 
     <application
@@ -29,6 +30,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.CarTube"
         android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".InstallGuideActivity"
+            android:exported="false"
+            android:label="@string/install_guide_title"
+            android:parentActivityName=".MainActivity" />
 
         <activity
             android:name=".MainActivity"

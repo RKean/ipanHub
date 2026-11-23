@@ -9,4 +9,13 @@
     <string name="notification_channel_desc">Shows when video is playing on Android Auto</string>
     <string name="notification_playing_on_car">Playing on your car screen</string>
     <string name="notification_stop">Stop</string>
+    <string name="install_banner_untrusted">Car shows audio only. Tap for steps to enable VIDEO on the head unit (Play-source install via PC adb).</string>
+    <string name="install_banner_trusted">Play-source install detected — open CarTube from Android Auto apps (navigation), not only Media.</string>
+    <string name="install_guide_title">Video on Android Auto</string>
+    <string name="install_guide_copy_adb">Copy adb command</string>
+    <string name="install_guide_copied">Copied</string>
+    <string name="install_guide_intro">Android Auto blocks template (video surface) apps unless they are installed with Google Play as the installer package. Unknown sources does not fix this.</string>
+    <string name="install_guide_windows_steps">Windows steps: enable USB debugging, connect phone, run platform-tools adb. Uninstall CarTube first. From the folder containing cartube-debug.apk run the command below. Full guide: docs/VIDEO_ON_CAR.md in the repo.</string>
+    <string name="install_guide_shizuku_note">No PC? Use Shizuku plus UnknownAuto on the phone (GitHub) to install with Play attribution. Root not required on most devices.</string>
+    <string name="install_guide_after_install">After reinstall: Android Auto developer Unknown sources ON, Customize launcher, pick CarTube under apps/navigation (not Media only), then Send to car on the phone.</string>
 </resources>

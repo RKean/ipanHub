@@ -94,15 +94,24 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
                 .build()
         )
         val title = PlaybackController.title
+        val videoId = PlaybackController.videoId
+        val builder = android.support.v4.media.MediaMetadataCompat.Builder()
         if (title.isNotBlank()) {
-            mediaSession.setMetadata(
-                android.support.v4.media.MediaMetadataCompat.Builder()
-                    .putString(
-                        android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE,
-                        title
-                    )
-                    .build()
+            builder.putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE, title)
+        }
+        if (videoId.isNotBlank()) {
+            val art = YouTubeArtwork.thumbnailUri(videoId).toString()
+            builder.putString(
+                android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI,
+                art
             )
+            builder.putString(
+                android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI,
+                art
+            )
+        }
+        if (title.isNotBlank() || videoId.isNotBlank()) {
+            mediaSession.setMetadata(builder.build())
         }
     }
 
