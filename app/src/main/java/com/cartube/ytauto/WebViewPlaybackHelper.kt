@@ -1,5 +1,6 @@
 package com.cartube.ytauto
 
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONObject
 
@@ -15,7 +16,37 @@ object WebViewPlaybackHelper {
         })();
     """
 
+    const val JS_INSTALL_PLAY_HOOK = """
+        (function(){
+          function notify(v) {
+            if (!v) return;
+            try {
+              CarTubeBridge.onVideoPlay(Math.floor((v.currentTime||0)*1000));
+            } catch(e) {}
+          }
+          function hook(v) {
+            if (!v || v._cartubeHooked) return;
+            v._cartubeHooked = true;
+            v.addEventListener('play', function(){ notify(v); });
+            v.addEventListener('playing', function(){ notify(v); });
+          }
+          function scan() {
+            var list = document.querySelectorAll('video');
+            for (var i = 0; i < list.length; i++) hook(list[i]);
+          }
+          scan();
+          try {
+            new MutationObserver(scan).observe(document.documentElement, {childList:true, subtree:true});
+          } catch(e) {}
+        })();
+    """
+
     data class EmbeddedVideoState(val playing: Boolean, val positionMs: Long)
+
+    fun installPlayBridge(webView: WebView, bridge: PlayBridge) {
+        webView.removeJavascriptInterface("CarTubeBridge")
+        webView.addJavascriptInterface(bridge, "CarTubeBridge")
+    }
 
     fun readEmbeddedVideoState(webView: WebView, onResult: (EmbeddedVideoState) -> Unit) {
         webView.evaluateJavascript(JS_READ_STATE) { raw -> onResult(parseJsJson(raw)) }
@@ -37,6 +68,11 @@ object WebViewPlaybackHelper {
         )
     }
 
+    fun injectPageHooks(webView: WebView) {
+        webView.evaluateJavascript(YouTubeAdBlocker.INJECT_JS, null)
+        webView.evaluateJavascript(JS_INSTALL_PLAY_HOOK, null)
+    }
+
     private fun parseJsJson(raw: String?): EmbeddedVideoState {
         if (raw.isNullOrBlank() || raw == "null") return EmbeddedVideoState(false, 0L)
         return try {
@@ -50,6 +86,15 @@ object WebViewPlaybackHelper {
             )
         } catch (_: Exception) {
             EmbeddedVideoState(false, 0L)
+        }
+    }
+
+    class PlayBridge(
+        private val onPlay: (positionMs: Long) -> Unit
+    ) {
+        @JavascriptInterface
+        fun onVideoPlay(positionMs: Int) {
+            onPlay(positionMs.toLong())
         }
     }
 }

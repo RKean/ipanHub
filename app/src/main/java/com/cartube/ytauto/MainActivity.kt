@@ -13,7 +13,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
-import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -29,12 +28,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.car.app.connection.CarConnection as AaCarConnection
 import androidx.core.view.isVisible
 import com.cartube.ytauto.databinding.ActivityMainBinding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.imageview.ShapeableImageView
-import com.google.android.material.materialswitch.MaterialSwitch
-import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.launch
 import org.schabi.newpipe.extractor.NewPipe
 import java.net.URLEncoder
@@ -48,13 +46,22 @@ class MainActivity : AppCompatActivity() {
     private var lastSentVideoId: String? = null
     private var handoffInFlight = false
     private var userSeeking = false
+    private var suppressWebViewPlayHook = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val playBridge = WebViewPlaybackHelper.PlayBridge { pos -> onWebViewVideoPlay(pos) }
+
     private val silenceRunnable = object : Runnable {
         override fun run() {
-            if (PlaybackController.hasActivePlayback) {
+            if (PlaybackController.hasActivePlayback &&
+                PlaybackController.playbackMode == PlaybackController.PlaybackMode.CAR
+            ) {
                 WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
-                binding.carRemoteOverlay.isVisible =
-                    PlaybackController.playbackMode == PlaybackController.PlaybackMode.CAR
+                binding.carRemoteOverlay.isVisible = true
+            } else if (PlaybackController.hasActivePlayback &&
+                PlaybackController.playbackMode == PlaybackController.PlaybackMode.PHONE_BACKGROUND
+            ) {
+                WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
+                binding.carRemoteOverlay.isVisible = false
             } else {
                 binding.carRemoteOverlay.isVisible = false
             }
@@ -74,7 +81,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var miniSeek: SeekBar
     private lateinit var miniThumb: ShapeableImageView
     private lateinit var miniPlayPause: MaterialButton
-    private lateinit var playOnCarSwitch: MaterialSwitch
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -104,7 +110,6 @@ class MainActivity : AppCompatActivity() {
         miniSeek = findViewById(R.id.miniSeek)
         miniThumb = findViewById(R.id.miniThumb)
         miniPlayPause = findViewById(R.id.miniPlayPause)
-        playOnCarSwitch = findViewById(R.id.playOnCarSwitch)
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -120,17 +125,6 @@ class MainActivity : AppCompatActivity() {
 
         binding.toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
-        playOnCarSwitch.isChecked = CarTubePrefs.isPlayOnCarEnabled(this)
-        playOnCarSwitch.setOnCheckedChangeListener { _, checked ->
-            CarTubePrefs.setPlayOnCarEnabled(this, checked)
-            if (checked) {
-                maybeAutoSendCurrentVideo(force = true)
-            }
-        }
-
-        findViewById<MaterialButton>(R.id.sendToCarButton).setOnClickListener {
-            maybeAutoSendCurrentVideo(force = true)
-        }
         miniPlayPause.setOnClickListener {
             if (PlaybackClient.isPlaying()) PlaybackClient.pause() else PlaybackClient.play()
         }
@@ -183,6 +177,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun onWebViewVideoPlay(positionMs: Long) {
+        mainHandler.post {
+            if (suppressWebViewPlayHook) return@post
+            if (!CarConnection.shouldAutoRouteToCar) return@post
+            val videoId = YouTubeUrlParser.extractVideoId(binding.webView.url.orEmpty()) ?: return@post
+            routePlaybackToCar(videoId, pageTitle(), positionMs)
+        }
+    }
+
+    private fun routePlaybackToCar(videoId: String, title: String, positionMs: Long) {
+        if (handoffInFlight) return
+        handoffInFlight = true
+        ensureNotificationPermission()
+        CookieBridge.syncToNewPipe()
+        suppressWebViewPlayHook = true
+        WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
+
+        if (videoId == PlaybackController.videoId && PlaybackController.hasActivePlayback &&
+            PlaybackController.playbackMode == PlaybackController.PlaybackMode.CAR
+        ) {
+            PlaybackClient.seekTo(positionMs)
+            PlaybackClient.play()
+            lastSentVideoId = videoId
+            handoffInFlight = false
+            suppressWebViewPlayHook = false
+            refreshMiniPlayerUi()
+            return
+        }
+
+        lastSentVideoId = videoId
+        YoutubePlayback.requestPlayOnCar(applicationContext, videoId, title, positionMs)
+        ThumbnailLoader.loadYouTubeThumbnail(videoId, miniThumb)
+        binding.carRemoteOverlay.isVisible = true
+        binding.remoteTitle.text = title
+        Log.i(CarTubePlaybackService.TAG, "[auto-car] video=$videoId pos=$positionMs session=active")
+        handoffInFlight = false
+        suppressWebViewPlayHook = false
+    }
+
     private fun performSearch(query: String) {
         val q = query.trim()
         if (q.isEmpty()) return
@@ -192,6 +225,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        AaCarConnection(this).type.observe(this) { state ->
+            CarConnection.setProjectionActive(
+                state == AaCarConnection.CONNECTION_TYPE_PROJECTION
+            )
+        }
         PlaybackClient.connect(applicationContext)
         PlaybackController.addPlaybackListener(uiSyncListener)
         PlaybackClient.addUiListener(uiSyncListener)
@@ -232,6 +270,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun attemptWebViewBackgroundHandoff() {
+        if (CarConnection.shouldAutoRouteToCar) return
         if (PlaybackController.hasActivePlayback || handoffInFlight) return
 
         val videoId = YouTubeUrlParser.extractVideoId(binding.webView.url.orEmpty()) ?: run {
@@ -242,32 +281,21 @@ class MainActivity : AppCompatActivity() {
         WebViewPlaybackHelper.readEmbeddedVideoState(binding.webView) { state ->
             handoffInFlight = false
             if (state.playing) {
+                Log.i(
+                    CarTubePlaybackService.TAG,
+                    "[handoff] phone background video=$videoId pos=${state.positionMs}"
+                )
                 ensureNotificationPermission()
                 CookieBridge.syncToNewPipe()
                 WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
                 val title = pageTitle()
-                if (CarTubePrefs.isPlayOnCarEnabled(this)) {
-                    Log.i(CarTubePlaybackService.TAG, "[handoff] car video=$videoId pos=${state.positionMs}")
-                    lastSentVideoId = videoId
-                    YoutubePlayback.requestPlayOnCar(
-                        applicationContext,
-                        videoId,
-                        title,
-                        state.positionMs
-                    )
-                } else {
-                    Log.i(
-                        CarTubePlaybackService.TAG,
-                        "[handoff] phone background video=$videoId pos=${state.positionMs}"
-                    )
-                    YoutubePlayback.requestPhoneBackgroundPlay(
-                        applicationContext,
-                        videoId,
-                        title,
-                        state.positionMs
-                    )
-                    lastSentVideoId = videoId
-                }
+                YoutubePlayback.requestPhoneBackgroundPlay(
+                    applicationContext,
+                    videoId,
+                    title,
+                    state.positionMs
+                )
+                lastSentVideoId = videoId
             } else {
                 binding.webView.onPause()
             }
@@ -303,6 +331,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val webView = binding.webView
+        WebViewPlaybackHelper.installPlayBridge(webView, playBridge)
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
@@ -334,13 +363,13 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView, url: String) {
                 CookieBridge.syncToNewPipe()
-                view.evaluateJavascript(YouTubeAdBlocker.INJECT_JS, null)
-                WebViewPlaybackHelper.silenceEmbeddedPlayer(view)
+                WebViewPlaybackHelper.injectPageHooks(view)
                 val videoId = YouTubeUrlParser.extractVideoId(url)
-                if (videoId != null) {
-                    maybeAutoSendCurrentVideo(force = false)
-                } else {
+                if (videoId == null) {
                     lastSentVideoId = null
+                }
+                if (CarConnection.shouldAutoRouteToCar && videoId != null) {
+                    WebViewPlaybackHelper.silenceEmbeddedPlayer(view)
                 }
             }
         }
@@ -349,30 +378,13 @@ class MainActivity : AppCompatActivity() {
     private fun pageTitle(): String = binding.webView.title?.substringBefore(" - YouTube").orEmpty()
         .ifBlank { "YouTube" }
 
-    private fun maybeAutoSendCurrentVideo(force: Boolean) {
-        val url = binding.webView.url ?: return
-        val videoId = YouTubeUrlParser.extractVideoId(url) ?: return
-        if (!force && !CarTubePrefs.isPlayOnCarEnabled(this)) return
-        if (!force && videoId == lastSentVideoId) return
-        sendVideoToCar(videoId, pageTitle())
-    }
-
-    private fun sendVideoToCar(videoId: String, title: String) {
-        ensureNotificationPermission()
-        lastSentVideoId = videoId
-        CookieBridge.syncToNewPipe()
-        WebViewPlaybackHelper.silenceEmbeddedPlayer(binding.webView)
-        val pos = PlaybackClient.positionMs().takeIf { PlaybackController.videoId == videoId } ?: 0L
-        YoutubePlayback.requestPlayOnCar(applicationContext, videoId, title, pos)
-        ThumbnailLoader.loadYouTubeThumbnail(videoId, miniThumb)
-        binding.carRemoteOverlay.isVisible = true
-        binding.remoteTitle.text = title
-    }
-
     private fun refreshMiniPlayerUi() {
         val active = PlaybackController.hasActivePlayback
         val title = PlaybackController.title
         val videoId = PlaybackController.videoId
+        findViewById<com.google.android.material.card.MaterialCardView>(R.id.miniPlayer)
+            ?.isVisible = active
+
         if (active && title.isNotBlank()) {
             miniTitle.text = title
             miniChannel.text = when (PlaybackController.playbackMode) {
@@ -383,10 +395,9 @@ class MainActivity : AppCompatActivity() {
                 ThumbnailLoader.loadYouTubeThumbnail(videoId, miniThumb)
             }
             binding.remoteTitle.text = title
-        } else {
-            miniTitle.text = getString(R.string.nothing_playing)
-            miniChannel.text = getString(R.string.mini_player_subtitle)
         }
+
+        if (!active) return
 
         val playing = PlaybackClient.isPlaying()
         miniPlayPause.setIconResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)

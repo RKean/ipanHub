@@ -1,14 +1,13 @@
 package com.cartube.ytauto
 
 import androidx.car.app.CarContext
-import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 
-class WaitingScreen(carContext: CarContext) : Screen(carContext) {
+class WaitingScreen(carContext: CarContext) : SafeCarScreen(carContext) {
 
     private val playbackListener: () -> Unit = { handlePlaybackChanged() }
 
@@ -31,9 +30,9 @@ class WaitingScreen(carContext: CarContext) : Screen(carContext) {
         }
     }
 
-    override fun onGetTemplate(): Template {
+    override fun buildTemplate(): Template {
         val body = buildString {
-            append(carContext.getString(R.string.phone_hint))
+            append(carContext.getString(R.string.waiting_for_video))
             append("\n\n")
             append(carContext.getString(R.string.parked_only_hint))
         }
@@ -41,7 +40,7 @@ class WaitingScreen(carContext: CarContext) : Screen(carContext) {
             .setTitle(carContext.getString(R.string.app_name))
             .addAction(
                 Action.Builder()
-                    .setTitle("Refresh")
+                    .setTitle(carContext.getString(R.string.refresh))
                     .setOnClickListener { invalidate() }
                     .build()
             )

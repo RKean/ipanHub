@@ -58,13 +58,6 @@
                     android:textColor="@color/md_theme_outline"
                     android:textSize="12sp" />
             </LinearLayout>
-
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/playOnCarSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/play_on_car"
-                android:textSize="11sp" />
         </LinearLayout>
 
         <SeekBar
@@ -105,14 +98,6 @@
                 android:layout_height="48dp"
                 app:icon="@drawable/ic_skip_forward"
                 app:iconTint="@color/md_theme_on_surface" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/sendToCarButton"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/send_to_car" />
         </LinearLayout>
 
         <TextView

@@ -2,14 +2,14 @@
     <string name="app_name">CarTube</string>
     <string name="search_hint">Search YouTube</string>
     <string name="dismiss">Dismiss</string>
-    <string name="phone_hint">Browse YouTube, then use the player bar below. Enable Play on car for the head unit.</string>
+    <string name="phone_hint">Browse YouTube on your phone. With Android Auto open, tap play — video goes to the car automatically.</string>
     <string name="phone_watch_hint">Watch page open — use Play on car or the mini player controls.</string>
     <string name="background_play_active">Background playback active — WebView is muted.</string>
     <string name="notification_playing_phone">Playing in background on your phone</string>
     <string name="waiting_for_video">Waiting for a video from your phone…</string>
     <string name="parked_only_hint">For safety, use only while parked.</string>
-    <string name="send_to_car">Send to car</string>
-    <string name="play_on_car">Play on car</string>
+    <string name="refresh">Refresh</string>
+    <string name="car_template_error">Controls could not be shown. Playback may continue on the surface.</string>
     <string name="now_playing_on_car">Now playing on Android Auto</string>
     <string name="remote_playing_on_car">Now playing on car</string>
     <string name="webview_silenced_hint">Phone player is muted — control playback below or on the head unit.</string>

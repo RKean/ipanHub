@@ -47,16 +47,18 @@ The phone app shows an orange/green **install banner** and an in-app guide (tap 
 2. **Customize launcher** → check CarTube.
 3. Reboot phone + reconnect USB/wireless AA if the app list is stale.
 
-## Phone background playback (v1.1.0)
+## Phone background playback (v1.1.1)
 
 When you play a video in the WebView and **leave the app or lock the screen**, CarTube **hands off** to the foreground player at the current position (like Premium background play). Use the media notification or Bluetooth headset buttons.
 
 **Tips if audio stops on your OEM phone:** Settings → Apps → CarTube → Battery → **Unrestricted** (disable aggressive optimization).
 
-## Features (v1.1.0)
+## Features (v1.1.1)
 
+- With **Android Auto connected**, tap play in the WebView → video starts on the car automatically (no button)
 - Single **ExoPlayer** via **MediaSession** — phone mini-player stays in sync with the car (play/pause/seek)
-- Material 3 dark UI, search bar, dismissible install chip, mini-player with **Play on car** toggle
+- Material 3 dark UI, search bar, dismissible install chip, remote mini-player when FGS is active
+- Car **NavigationTemplate** uses icon-only actions; title/progress drawn on the video surface overlay
 - WebView **ad request blocking** + in-page ad skip; WebView muted while car/background plays
 - NewPipe **v0.26.5** stream resolution + InnerTube fallback (extracted stream has no preroll)
 - Foreground **MediaSessionService** playback (survives phone home/screen off)
