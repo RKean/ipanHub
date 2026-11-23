@@ -32,6 +32,8 @@ object PlaybackController {
 
     private val surfaceLock = Any()
     private var carSurface: Surface? = null
+    /** Surface currently passed to ExoPlayer — avoid redundant [ExoPlayer.setVideoSurface]. */
+    private var surfaceBoundToPlayer: Surface? = null
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
     private var fanOutListener: Player.Listener? = null
 
@@ -72,6 +74,9 @@ object PlaybackController {
         notifyListeners()
     }
 
+    /**
+     * Wire UI/car shell to the process player. Does **not** own or release ExoPlayer ([PlaybackEngine] does).
+     */
     fun attachPlayer(
         exo: ExoPlayer,
         videoTitle: String,
@@ -80,92 +85,82 @@ object PlaybackController {
         onSurfaceReady: CompletableDeferred<Unit>? = null
     ) {
         val previous = player
-        if (previous === exo) {
-            playbackMode = mode
-            title = videoTitle
-            videoId = id
-            surfaceReadySignal = onSurfaceReady
-            synchronized(surfaceLock) {
-                when (mode) {
-                    PlaybackMode.PHONE_BACKGROUND -> exo.clearVideoSurface()
-                    PlaybackMode.CAR -> {
-                        val surface = carSurface
-                        if (surface != null && surface.isValid) {
-                            exo.setVideoSurface(surface)
-                            surfaceReadySignal?.complete(Unit)
-                            surfaceReadySignal = null
-                        }
-                    }
-                }
-            }
-            notifyListeners()
-            return
-        }
-
-        fanOutListener?.let { listener -> previous?.removeListener(listener) }
-        if (previous != null) {
-            synchronized(surfaceLock) {
-                previous.clearVideoSurface()
-            }
-            previous.release()
+        if (previous !== exo && previous != null) {
+            fanOutListener?.let { previous.removeListener(it) }
         }
         playbackMode = mode
         player = exo
         title = videoTitle
         videoId = id
         surfaceReadySignal = onSurfaceReady
-        fanOutListener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) = notifyListeners()
-            override fun onPlaybackStateChanged(playbackState: Int) = notifyListeners()
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int
-            ) = notifyListeners()
-        }.also { exo.addListener(it) }
+
+        if (fanOutListener == null) {
+            fanOutListener = object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) = notifyListeners()
+                override fun onPlaybackStateChanged(playbackState: Int) = notifyListeners()
+                override fun onPositionDiscontinuity(
+                    oldPosition: Player.PositionInfo,
+                    newPosition: Player.PositionInfo,
+                    reason: Int
+                ) = notifyListeners()
+            }.also { exo.addListener(it) }
+        } else if (previous !== exo) {
+            fanOutListener?.let { listener ->
+                previous?.removeListener(listener)
+                exo.addListener(listener)
+            }
+        }
 
         synchronized(surfaceLock) {
             when (mode) {
-                PlaybackMode.PHONE_BACKGROUND -> exo.clearVideoSurface()
-                PlaybackMode.CAR -> {
-                    val surface = carSurface
-                    if (surface != null && surface.isValid) {
-                        exo.setVideoSurface(surface)
-                        surfaceReadySignal?.complete(Unit)
-                        surfaceReadySignal = null
+                PlaybackMode.PHONE_BACKGROUND -> {
+                    if (surfaceBoundToPlayer != null) {
+                        CarTubeLog.i("[surface] clear video (phone bg) ${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)}")
+                        exo.clearVideoSurface()
+                        surfaceBoundToPlayer = null
                     }
                 }
+                PlaybackMode.CAR -> applyCarSurfaceIfNeeded(exo)
             }
         }
         notifyListeners()
     }
 
-    /** Host surface became available — ExoPlayer is the sole producer (no canvas overlay). */
+    private fun applyCarSurfaceIfNeeded(exo: ExoPlayer) {
+        val surface = carSurface ?: return
+        if (!surface.isValid) return
+        if (surfaceBoundToPlayer === surface) {
+            surfaceReadySignal?.complete(Unit)
+            surfaceReadySignal = null
+            return
+        }
+        CarTubeLog.i(
+            "[surface] attach id=${CarTubeLog.surfaceIdentity(surface)} " +
+                "was=${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)}"
+        )
+        exo.setVideoSurface(surface)
+        surfaceBoundToPlayer = surface
+        surfaceReadySignal?.complete(Unit)
+        surfaceReadySignal = null
+    }
+
     fun attachCarSurface(surface: Surface) {
         synchronized(surfaceLock) {
-            if (carSurface === surface && surface.isValid) {
-                if (playbackMode == PlaybackMode.CAR) {
-                    player?.setVideoSurface(surface)
-                    surfaceReadySignal?.complete(Unit)
-                    surfaceReadySignal = null
-                }
-                return
+            if (carSurface !== surface) {
+                carSurface = surface
             }
-            player?.clearVideoSurface()
-            carSurface = surface
             if (playbackMode != PlaybackMode.CAR) return
-            if (surface.isValid) {
-                player?.setVideoSurface(surface)
-                surfaceReadySignal?.complete(Unit)
-                surfaceReadySignal = null
-            }
+            player?.let { applyCarSurfaceIfNeeded(it) }
         }
     }
 
-    /** Detach before the host releases the surface (onSurfaceDestroyed / screen teardown). */
     fun releaseCarSurface() {
         synchronized(surfaceLock) {
-            player?.clearVideoSurface()
+            if (surfaceBoundToPlayer != null) {
+                player?.clearVideoSurface()
+                CarTubeLog.i("[surface] release ${CarTubeLog.surfaceIdentity(surfaceBoundToPlayer)}")
+                surfaceBoundToPlayer = null
+            }
             carSurface = null
             surfaceReadySignal = null
         }
@@ -176,13 +171,15 @@ object PlaybackController {
         if (surface == null) releaseCarSurface() else attachCarSurface(surface)
     }
 
-    fun detachAndRelease() {
+    /** UI detach only — never release the process [ExoPlayer]. */
+    fun detachUiOnly() {
         synchronized(surfaceLock) {
             fanOutListener?.let { player?.removeListener(it) }
             fanOutListener = null
-            player?.clearVideoSurface()
-            player?.release()
-            player = null
+            if (surfaceBoundToPlayer != null) {
+                player?.clearVideoSurface()
+                surfaceBoundToPlayer = null
+            }
             carSurface = null
             title = ""
             videoId = ""
@@ -193,6 +190,9 @@ object PlaybackController {
         }
         notifyListeners()
     }
+
+  @Deprecated("Use detachUiOnly", ReplaceWith("detachUiOnly()"))
+    fun detachAndRelease() = detachUiOnly()
 
     val hasActivePlayback: Boolean
         get() = player != null

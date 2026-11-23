@@ -15,6 +15,8 @@ class CarTubeApp : Application() {
     override fun onCreate() {
         super.onCreate()
         QueueController.init(this)
+        PlaybackEngine.init(this)
+        PlaybackClient.ensureConnected(this)
         appScope.launch(Dispatchers.IO) {
             NewPipe.init(NewPipeDownloader.getInstance())
         }

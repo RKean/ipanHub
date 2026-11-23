@@ -18,6 +18,8 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -332,6 +334,10 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(this, InstallGuideActivity::class.java))
                     true
                 }
+                R.id.action_copy_logs -> {
+                    copyDebugLogs()
+                    true
+                }
                 else -> false
             }
         }
@@ -347,6 +353,17 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleShareIntent(intent)
+    }
+
+    private fun copyDebugLogs() {
+        val text = CarTubeLog.dump()
+        val cm = getSystemService(ClipboardManager::class.java)
+        cm.setPrimaryClip(ClipData.newPlainText(getString(R.string.debug_logs_clip), text))
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startActivity(Intent.createChooser(share, getString(R.string.debug_logs_share)))
     }
 
     private fun handleShareIntent(intent: Intent?) {
@@ -379,7 +396,6 @@ class MainActivity : AppCompatActivity() {
         QueueController.removeListener(queueListener)
         PlaybackClient.removeUiListener(uiSyncListener)
         PlaybackController.removePlaybackListener(uiSyncListener)
-        PlaybackClient.disconnect(applicationContext)
         unregisterReceiver(errorReceiver)
         super.onStop()
     }

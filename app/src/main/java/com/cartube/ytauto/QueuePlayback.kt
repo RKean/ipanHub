@@ -10,7 +10,6 @@ object QueuePlayback {
         QueueController.playNow(item)
         val sameTrack = PlaybackController.videoId == item.videoId
         CarTubePlaybackService.requestPlayCurrent(context, forceRestart = !sameTrack)
-        if (!sameTrack) StreamCache.warmResolve(item.videoId)
     }
 
     fun playNextInQueue(context: Context, item: QueueItem) {

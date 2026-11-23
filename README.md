@@ -4,6 +4,14 @@ Personal-use Android app: **co-driver picks songs on the phone**, **video plays 
 
 > **Safety:** Use only while **parked**.
 
+## v1.2.2 — Single player + switch fixes
+
+- Process-wide **PlaybackEngine** (one ExoPlayer); service restarts do not create new players
+- **ResolveCoordinator** dedupes in-flight resolves; prefetch is URL-only (no media download)
+- Buffering watchdog disabled for mid-track rebuffers; larger HLS **LoadControl** buffers
+- Idempotent car **surface** attach; action logging with `p@hash` on every line
+- Menu → **Copy debug logs** (last ~300 lines + share)
+
 ## v1.2.1 — Search suggestions + playback
 
 - **YouTube-style autocomplete** under the search bar (NewPipe `SuggestionExtractor`, Google suggest fallback), 250ms debounce, stale request cancel

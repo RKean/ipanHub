@@ -15,6 +15,9 @@
     <string name="added_play_next">Added — plays next</string>
     <string name="added_to_queue">Added to queue</string>
     <string name="clear_queue">Clear queue</string>
+    <string name="copy_debug_logs">Copy debug logs</string>
+    <string name="debug_logs_clip">CarTube logs</string>
+    <string name="debug_logs_share">Share CarTube logs</string>
     <string name="queue_empty">Queue is empty — search and tap Play now</string>
     <string name="remove_from_queue">Remove</string>
     <string name="link_added">Link added — playing now</string>

@@ -8,4 +8,8 @@
         android:id="@+id/action_install_guide"
         android:title="@string/install_guide_title"
         android:showAsAction="never" />
+    <item
+        android:id="@+id/action_copy_logs"
+        android:title="@string/copy_debug_logs"
+        android:showAsAction="never" />
 </menu>

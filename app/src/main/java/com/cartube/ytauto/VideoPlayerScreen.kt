@@ -2,7 +2,6 @@ package com.cartube.ytauto
 
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
@@ -49,7 +48,10 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
         val surface = surfaceContainer.surface ?: return
         if (attachedSurface === surface) return
         attachedSurface = surface
-        Log.i(CarTubePlaybackService.TAG, "[car] surface available")
+        CarTubeLog.i(
+            "[car] surface available id=${CarTubeLog.surfaceIdentity(surface)} " +
+                PlaybackEngine.playerHashLabel()
+        )
         PlaybackController.attachCarSurface(surface)
         surfaceAttached = true
         invalidate()
