@@ -2,6 +2,7 @@ package com.cartube.ytauto
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
@@ -17,23 +18,21 @@ import androidx.lifecycle.LifecycleOwner
 
 /**
  * Full-screen video on the head unit via [NavigationTemplate] + [SurfaceCallback].
- * Action strips use **icon-only** actions (Car App Library constraints).
+ * Only ExoPlayer writes to the surface — no canvas/HWUI overlay (single producer).
  */
 class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), SurfaceCallback {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var surfaceAttached = false
     private val playbackTick = object : Runnable {
         override fun run() {
-            if (PlaybackController.player?.isPlaying == true) {
-                CarSurfaceOverlay.bump()
+            if (surfaceAttached && PlaybackController.player?.isPlaying == true) {
+                invalidate()
             }
-            mainHandler.postDelayed(this, 1_000L)
+            mainHandler.postDelayed(this, 2_000L)
         }
     }
-    private val playbackListener = {
-        invalidate()
-        CarSurfaceOverlay.bump()
-    }
+    private val playbackListener = { invalidate() }
 
     init {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
@@ -43,24 +42,32 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
                 mainHandler.post(playbackTick)
             }
 
+            override fun onStop(owner: LifecycleOwner) {
+                PlaybackController.releaseCarSurface()
+                surfaceAttached = false
+            }
+
             override fun onDestroy(owner: LifecycleOwner) {
                 mainHandler.removeCallbacks(playbackTick)
                 PlaybackController.removePlaybackListener(playbackListener)
-                PlaybackController.setCarSurface(null)
-                CarSurfaceOverlay.attachSurface(null)
+                PlaybackController.releaseCarSurface()
+                surfaceAttached = false
             }
         })
     }
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
-        PlaybackController.setCarSurface(surfaceContainer.surface)
-        CarSurfaceOverlay.attachSurface(surfaceContainer.surface)
-        CarSurfaceOverlay.bump()
+        val surface = surfaceContainer.surface ?: return
+        Log.i(CarTubePlaybackService.TAG, "[car] surface available")
+        PlaybackController.attachCarSurface(surface)
+        surfaceAttached = true
+        invalidate()
     }
 
     override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
-        PlaybackController.setCarSurface(null)
-        CarSurfaceOverlay.attachSurface(null)
+        Log.i(CarTubePlaybackService.TAG, "[car] surface destroyed — detaching player")
+        surfaceAttached = false
+        PlaybackController.releaseCarSurface()
     }
 
     override fun buildTemplate(): Template {
@@ -71,14 +78,12 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
             if (playing) R.drawable.ic_pause else R.drawable.ic_play
         ) {
             player?.let { p -> if (p.isPlaying) p.pause() else p.play() }
-            CarSurfaceOverlay.bump()
             invalidate()
         }
 
         val seekBack = iconAction(R.drawable.ic_skip_back) {
             val pos = player?.currentPosition ?: 0L
             player?.seekTo((pos - 10_000L).coerceAtLeast(0L))
-            CarSurfaceOverlay.bump()
             invalidate()
         }
 
@@ -86,7 +91,6 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
             val pos = player?.currentPosition ?: 0L
             val end = player?.duration?.coerceAtLeast(0L) ?: 0L
             player?.seekTo((pos + 10_000L).coerceAtMost(end))
-            CarSurfaceOverlay.bump()
             invalidate()
         }
 

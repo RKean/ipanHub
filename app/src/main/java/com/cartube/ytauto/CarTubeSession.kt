@@ -15,6 +15,7 @@ class CarTubeSession : Session() {
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
+                PlaybackController.releaseCarSurface()
                 CarConnection.onSessionStopped()
             }
         })

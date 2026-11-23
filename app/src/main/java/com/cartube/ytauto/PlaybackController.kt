@@ -23,6 +23,7 @@ object PlaybackController {
     var videoId: String = ""
         private set
 
+    private val surfaceLock = Any()
     private var carSurface: Surface? = null
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
     private var fanOutListener: Player.Listener? = null
@@ -62,7 +63,9 @@ object PlaybackController {
         val previous = player
         fanOutListener?.let { listener -> previous?.removeListener(listener) }
         if (previous != null && previous !== exo) {
-            previous.clearVideoSurface()
+            synchronized(surfaceLock) {
+                previous.clearVideoSurface()
+            }
             previous.release()
         }
         playbackMode = mode
@@ -79,36 +82,64 @@ object PlaybackController {
                 reason: Int
             ) = notifyListeners()
         }.also { exo.addListener(it) }
-        carSurface?.let {
-            exo.setVideoSurface(it)
-            surfaceReadySignal?.complete(Unit)
-            surfaceReadySignal = null
+
+        synchronized(surfaceLock) {
+            when (mode) {
+                PlaybackMode.PHONE_BACKGROUND -> exo.clearVideoSurface()
+                PlaybackMode.CAR -> {
+                    val surface = carSurface
+                    if (surface != null && surface.isValid) {
+                        exo.setVideoSurface(surface)
+                        surfaceReadySignal?.complete(Unit)
+                        surfaceReadySignal = null
+                    }
+                }
+            }
         }
         notifyListeners()
     }
 
-    fun setCarSurface(surface: Surface?) {
-        if (playbackMode == PlaybackMode.PHONE_BACKGROUND) return
-        carSurface = surface
-        if (surface != null) {
-            player?.setVideoSurface(surface)
-            surfaceReadySignal?.complete(Unit)
-            surfaceReadySignal = null
-        } else {
+    /** Host surface became available — ExoPlayer is the sole producer (no canvas overlay). */
+    fun attachCarSurface(surface: Surface) {
+        synchronized(surfaceLock) {
             player?.clearVideoSurface()
+            carSurface = surface
+            if (playbackMode != PlaybackMode.CAR) return
+            if (surface.isValid) {
+                player?.setVideoSurface(surface)
+                surfaceReadySignal?.complete(Unit)
+                surfaceReadySignal = null
+            }
         }
     }
 
+    /** Detach before the host releases the surface (onSurfaceDestroyed / screen teardown). */
+    fun releaseCarSurface() {
+        synchronized(surfaceLock) {
+            player?.clearVideoSurface()
+            carSurface = null
+            surfaceReadySignal = null
+        }
+    }
+
+    @Deprecated("Use attachCarSurface / releaseCarSurface", ReplaceWith("releaseCarSurface()"))
+    fun setCarSurface(surface: Surface?) {
+        if (surface == null) releaseCarSurface() else attachCarSurface(surface)
+    }
+
     fun detachAndRelease() {
-        fanOutListener?.let { player?.removeListener(it) }
-        fanOutListener = null
-        player?.clearVideoSurface()
-        player?.release()
-        player = null
-        title = ""
-        videoId = ""
-        playbackMode = PlaybackMode.CAR
-        surfaceReadySignal = null
+        synchronized(surfaceLock) {
+            fanOutListener?.let { player?.removeListener(it) }
+            fanOutListener = null
+            player?.clearVideoSurface()
+            player?.release()
+            player = null
+            carSurface = null
+            title = ""
+            videoId = ""
+            playbackMode = PlaybackMode.CAR
+            surfaceReadySignal = null
+        }
         notifyListeners()
     }
 
