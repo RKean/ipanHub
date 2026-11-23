@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity() {
     private fun sendVideoToCar(videoId: String, title: String) {
         lastSentVideoId = videoId
         binding.statusText.text = getString(R.string.now_playing_on_car)
+        CookieBridge.syncToNewPipe()
         loadJob?.cancel()
         val app = application as CarTubeApp
         loadJob = app.appScope.launch {
