@@ -23,6 +23,13 @@ object PlaybackController {
     var videoId: String = ""
         private set
 
+    @Volatile
+    var isLoading: Boolean = false
+        private set
+
+    var loadingTitle: String = ""
+        private set
+
     private val surfaceLock = Any()
     private var carSurface: Surface? = null
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
@@ -51,6 +58,18 @@ object PlaybackController {
 
     private fun notifyListeners() {
         playbackListeners.forEach { it.invoke() }
+    }
+
+    fun setLoading(title: String) {
+        isLoading = true
+        loadingTitle = title
+        notifyListeners()
+    }
+
+    fun clearLoading() {
+        isLoading = false
+        loadingTitle = ""
+        notifyListeners()
     }
 
     fun attachPlayer(
@@ -124,6 +143,14 @@ object PlaybackController {
     /** Host surface became available — ExoPlayer is the sole producer (no canvas overlay). */
     fun attachCarSurface(surface: Surface) {
         synchronized(surfaceLock) {
+            if (carSurface === surface && surface.isValid) {
+                if (playbackMode == PlaybackMode.CAR) {
+                    player?.setVideoSurface(surface)
+                    surfaceReadySignal?.complete(Unit)
+                    surfaceReadySignal = null
+                }
+                return
+            }
             player?.clearVideoSurface()
             carSurface = surface
             if (playbackMode != PlaybackMode.CAR) return
@@ -159,6 +186,8 @@ object PlaybackController {
             carSurface = null
             title = ""
             videoId = ""
+            isLoading = false
+            loadingTitle = ""
             playbackMode = PlaybackMode.CAR
             surfaceReadySignal = null
         }

@@ -8,24 +8,28 @@ object QueuePlayback {
 
     fun playNow(context: Context, item: QueueItem) {
         QueueController.playNow(item)
-        CarTubePlaybackService.requestPlayCurrent(context, forceRestart = true)
+        val sameTrack = PlaybackController.videoId == item.videoId
+        CarTubePlaybackService.requestPlayCurrent(context, forceRestart = !sameTrack)
+        if (!sameTrack) StreamCache.warmResolve(item.videoId)
     }
 
     fun playNextInQueue(context: Context, item: QueueItem) {
         QueueController.playNext(item)
-        CarTubePlaybackService.requestPlayCurrent(context, forceRestart = false)
+        StreamCache.warmResolve(item.videoId)
     }
 
     fun addToQueue(context: Context, item: QueueItem) {
         QueueController.addToEnd(item)
+        StreamCache.warmResolve(item.videoId)
         if (QueueController.currentIndex() < 0) {
             CarTubePlaybackService.requestPlayCurrent(context, forceRestart = true)
         }
     }
 
     fun jumpTo(context: Context, index: Int) {
-        QueueController.jumpTo(index) ?: return
-        CarTubePlaybackService.requestPlayCurrent(context, forceRestart = true)
+        val item = QueueController.jumpTo(index) ?: return
+        val same = item.videoId == PlaybackController.videoId
+        CarTubePlaybackService.requestPlayCurrent(context, forceRestart = !same)
     }
 
     fun skipNext(context: Context) {

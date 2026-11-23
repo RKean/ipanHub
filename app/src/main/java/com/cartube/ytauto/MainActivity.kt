@@ -11,6 +11,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.View
 import android.widget.ImageButton
@@ -39,6 +41,7 @@ import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
@@ -50,12 +53,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val scope = CoroutineScope(Dispatchers.Main)
     private var searchJob: Job? = null
+    private var suggestJob: Job? = null
+    private var suggestSeq = 0
     private var userSeeking = false
     private var showingQueue = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var searchAdapter: SearchResultsAdapter
     private lateinit var queueAdapter: QueueListAdapter
+    private lateinit var suggestionsAdapter: SuggestionsAdapter
 
     private val miniTitle: TextView by lazy { findViewById(R.id.miniTitle) }
     private val miniChannel: TextView by lazy { findViewById(R.id.miniChannel) }
@@ -120,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         cookieWebView.warmUp()
 
         setupLists()
+        setupSuggestions()
         setupSearch()
         setupMiniPlayer()
         setupTabs()
@@ -136,10 +143,12 @@ class MainActivity : AppCompatActivity() {
                 RecentSearchStore.add(this, binding.searchInput.text?.toString().orEmpty())
             },
             onPlayNext = { result ->
+                StreamCache.warmResolve(result.videoId)
                 QueuePlayback.playNextInQueue(this, QueuePlayback.fromSearchResult(result))
                 Toast.makeText(this, R.string.added_play_next, Toast.LENGTH_SHORT).show()
             },
             onAddQueue = { result ->
+                StreamCache.warmResolve(result.videoId)
                 QueuePlayback.addToQueue(this, QueuePlayback.fromSearchResult(result))
                 Toast.makeText(this, R.string.added_to_queue, Toast.LENGTH_SHORT).show()
             }
@@ -171,20 +180,85 @@ class MainActivity : AppCompatActivity() {
         }).attachToRecyclerView(binding.queueList)
     }
 
+    private fun setupSuggestions() {
+        suggestionsAdapter = SuggestionsAdapter(
+            onPick = { query ->
+                binding.searchInput.setText(query)
+                hideSuggestions()
+                runSearch(query)
+            },
+            onFill = { query ->
+                binding.searchInput.setText(query)
+                binding.searchInput.setSelection(query.length)
+                requestSuggestions(query)
+            },
+            onRemove = { query ->
+                RecentSearchStore.remove(this, query)
+                showRecentIfEmptyField()
+            }
+        )
+        binding.suggestionsList.layoutManager = LinearLayoutManager(this)
+        binding.suggestionsList.adapter = suggestionsAdapter
+    }
+
     private fun setupSearch() {
         val input = binding.searchInput
+        input.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus && input.text.isNullOrBlank()) showRecentIfEmptyField()
+            if (!hasFocus) hideSuggestions()
+        }
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                val text = s?.toString().orEmpty()
+                if (text.isBlank()) showRecentIfEmptyField() else requestSuggestions(text)
+            }
+        })
         input.setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN) {
-                runSearch(input.text?.toString().orEmpty())
+                val q = input.text?.toString().orEmpty()
+                hideSuggestions()
+                runSearch(q)
                 true
             } else false
         }
     }
 
+    private fun showRecentIfEmptyField() {
+        if (!binding.searchInput.hasFocus()) return
+        val recent = RecentSearchStore.list(this)
+        suggestionsAdapter.showRecentRemove = true
+        suggestionsAdapter.setSuggestions(recent)
+        binding.suggestionsCard.isVisible = recent.isNotEmpty()
+    }
+
+    private fun requestSuggestions(prefix: String) {
+        suggestJob?.cancel()
+        val seq = ++suggestSeq
+        suggestJob = scope.launch {
+            delay(250)
+            if (seq != suggestSeq) return@launch
+            val list = withContext(Dispatchers.IO) { YoutubeSuggestions.fetch(prefix) }
+            if (seq != suggestSeq) return@launch
+            suggestionsAdapter.showRecentRemove = false
+            suggestionsAdapter.setSuggestions(list)
+            binding.suggestionsCard.isVisible = list.isNotEmpty()
+        }
+    }
+
+    private fun hideSuggestions() {
+        binding.suggestionsCard.isVisible = false
+        suggestJob?.cancel()
+    }
+
     private fun runSearch(query: String) {
         val q = query.trim()
         if (q.isEmpty()) return
+        hideSuggestions()
+        RecentSearchStore.add(this, q)
         searchJob?.cancel()
+        if (showingQueue) showSearchTab()
         binding.searchLoading.isVisible = true
         binding.emptyLabel.isVisible = false
         searchJob = scope.launch {
@@ -234,14 +308,16 @@ class MainActivity : AppCompatActivity() {
         showingQueue = false
         binding.searchList.isVisible = true
         binding.queueList.isVisible = false
-        (binding.chipSearch as Chip).isChecked = true
+        binding.chipSearch.isChecked = true
+        hideSuggestions()
     }
 
     private fun showQueueTab() {
         showingQueue = true
         binding.searchList.isVisible = false
         binding.queueList.isVisible = true
-        (binding.chipQueue as Chip).isChecked = true
+        binding.chipQueue.isChecked = true
+        hideSuggestions()
         refreshQueueUi()
     }
 
@@ -322,7 +398,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.miniPlayer).isVisible = active || QueueController.allItems().isNotEmpty()
         val title = PlaybackController.title
         val videoId = PlaybackController.videoId
-        if (active && title.isNotBlank()) {
+        if (PlaybackController.isLoading) {
+            miniTitle.text = getString(R.string.loading_title, PlaybackController.loadingTitle)
+            miniChannel.text = getString(R.string.loading_subtitle)
+        } else if (active && title.isNotBlank()) {
             miniTitle.text = title
             miniChannel.text = when (PlaybackController.playbackMode) {
                 PlaybackController.PlaybackMode.CAR -> getString(R.string.notification_playing_on_car)
@@ -338,7 +417,7 @@ class MainActivity : AppCompatActivity() {
             miniTitle.text = getString(R.string.nothing_playing)
             miniChannel.text = getString(R.string.mini_player_subtitle)
         }
-        if (!active) return
+        if (!active && !PlaybackController.isLoading) return
         miniPlayPause.setIconResource(
             if (PlaybackClient.isPlaying()) R.drawable.ic_pause else R.drawable.ic_play
         )

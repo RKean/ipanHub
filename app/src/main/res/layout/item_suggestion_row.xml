@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="44dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="12dp">
+
+    <ImageView
+        android:id="@+id/suggestIcon"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:contentDescription="@null"
+        android:src="@android:drawable/ic_menu_search"
+        app:tint="@color/md_theme_outline" />
+
+    <TextView
+        android:id="@+id/suggestText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/md_theme_on_surface"
+        android:textSize="14sp" />
+
+    <ImageButton
+        android:id="@+id/fillButton"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/fill_search"
+        android:src="@drawable/ic_suggest_fill"
+        app:tint="@color/md_theme_outline" />
+
+    <ImageButton
+        android:id="@+id/removeButton"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/remove_recent"
+        android:src="@android:drawable/ic_menu_close_clear_cancel"
+        android:visibility="gone"
+        app:tint="@color/md_theme_outline" />
+</LinearLayout>

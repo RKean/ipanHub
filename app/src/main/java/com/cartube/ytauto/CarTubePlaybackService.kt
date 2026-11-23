@@ -17,7 +17,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -30,10 +32,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import java.io.IOException
 
 /** Foreground [MediaSessionService] — single ExoPlayer, queue-driven. */
 class CarTubePlaybackService : MediaSessionService() {
@@ -41,13 +45,17 @@ class CarTubePlaybackService : MediaSessionService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var playJob: Job? = null
     private var prefetchJob: Job? = null
+    private var bufferingWatchdog: Job? = null
     private var hostPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private var resolvingVideoId: String? = null
     private var lastFailedVideoId: String? = null
     private var lastErrorBroadcastMs = 0L
-    @Volatile
+    private var currentStreamKind: YoutubeStreamResolver.StreamKind? = null
+  @Volatile
     private var isBuffering = false
+    private var bufferingSinceMs = 0L
+    private var lastPlayheadMs = 0L
 
     private val sessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -91,13 +99,10 @@ class CarTubePlaybackService : MediaSessionService() {
             ACTION_PLAY_QUEUE_CURRENT -> {
                 val force = intent.getBooleanExtra(EXTRA_FORCE_RESTART, false)
                 val item = QueueController.currentItem() ?: return START_NOT_STICKY
-                val pos = if (force) 0L else hostPlayer?.currentPosition ?: 0L
-                if (!force && item.videoId == PlaybackController.videoId && PlaybackController.hasActivePlayback) {
-                    hostPlayer?.play()
-                    return START_STICKY
-                }
+                if (!force && shouldNoOpForCurrent(item.videoId)) return START_STICKY
                 beginForeground(item.title)
-                startQueueItemJob(item, pos)
+                PlaybackController.setLoading(item.title)
+                startQueueItemJob(item, if (force) 0L else hostPlayer?.currentPosition ?: 0L, force)
             }
             ACTION_START_VIDEO -> {
                 val videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: return START_NOT_STICKY
@@ -105,7 +110,8 @@ class CarTubePlaybackService : MediaSessionService() {
                 val item = QueueItem(videoId, title.ifBlank { "YouTube" })
                 QueueController.playNow(item)
                 beginForeground(item.title)
-                startQueueItemJob(item, intent.getLongExtra(EXTRA_START_POSITION_MS, 0L))
+                PlaybackController.setLoading(item.title)
+                startQueueItemJob(item, intent.getLongExtra(EXTRA_START_POSITION_MS, 0L), force = true)
             }
         }
         return START_STICKY
@@ -114,18 +120,38 @@ class CarTubePlaybackService : MediaSessionService() {
     override fun onDestroy() {
         playJob?.cancel()
         prefetchJob?.cancel()
+        bufferingWatchdog?.cancel()
         serviceScope.cancel()
         stopPlayback()
         super.onDestroy()
     }
 
+    private fun shouldNoOpForCurrent(videoId: String): Boolean {
+        if (resolvingVideoId == videoId) {
+            Log.i(TAG, "[service] no-op — already loading $videoId")
+            return true
+        }
+        if (videoId != PlaybackController.videoId) return false
+        val p = hostPlayer ?: return false
+        return when (p.playbackState) {
+            Player.STATE_BUFFERING -> true
+            Player.STATE_READY -> {
+                if (!p.isPlaying) p.play()
+                true
+            }
+            else -> false
+        }
+    }
+
     private fun skipQueue(delta: Int) {
+        prefetchJob?.cancel()
         val item = when {
             delta > 0 -> QueueController.advanceToNext()
             else -> QueueController.backToPrevious()
         } ?: return
         beginForeground(item.title)
-        startQueueItemJob(item, 0L)
+        PlaybackController.setLoading(item.title)
+        startQueueItemJob(item, 0L, force = true)
     }
 
     private fun ensureSessionAndPlayer() {
@@ -153,17 +179,52 @@ class CarTubePlaybackService : MediaSessionService() {
             override fun onPlayerError(error: PlaybackException) {
                 val detail = error.cause?.message ?: error.message
                 Log.e(TAG, "[service] ExoPlayer error: $detail", error)
-                skipAfterError("Skipped — playback error")
+                tryFallbackOrSkip()
             }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) = updateNotification()
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                logPlayerState("isPlaying=$isPlaying")
+                updateNotification()
+            }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
-                updateNotification()
-                if (playbackState == Player.STATE_ENDED) {
-                    onTrackEnded()
+                logPlayerState("state=$playbackState")
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> {
+                        bufferingSinceMs = System.currentTimeMillis()
+                        lastPlayheadMs = exo.currentPosition
+                        startBufferingWatchdog()
+                    }
+                    Player.STATE_READY -> {
+                        cancelBufferingWatchdog()
+                        PlaybackController.clearLoading()
+                        schedulePrefetchAfterReady()
+                    }
+                    Player.STATE_ENDED -> onTrackEnded()
                 }
+                updateNotification()
+            }
+        })
+        exo.addAnalyticsListener(object : AnalyticsListener {
+            override fun onLoadError(
+                eventTime: AnalyticsListener.EventTime,
+                loadEventInfo: LoadEventInfo,
+                mediaLoadData: MediaLoadData,
+                error: IOException,
+                wasCanceled: Boolean
+            ) {
+                Log.e(
+                    TAG,
+                    "[load] uri=${loadEventInfo.uri} bytes=${loadEventInfo.bytesLoaded} err=${error.message}"
+                )
+            }
+
+            override fun onIsLoadingChanged(
+                eventTime: AnalyticsListener.EventTime,
+                isLoading: Boolean
+            ) {
+                Log.d(TAG, "[load] isLoading=$isLoading")
             }
         })
         hostPlayer = exo
@@ -174,10 +235,79 @@ class CarTubePlaybackService : MediaSessionService() {
         Log.i(TAG, "[service] MediaSession ready")
     }
 
+    private fun logPlayerState(extra: String) {
+        val p = hostPlayer ?: return
+        Log.i(
+            TAG,
+            "[player] $extra pos=${p.currentPosition} buffered=${p.bufferedPosition} speed=${p.playbackParameters.speed}"
+        )
+    }
+
+    private fun startBufferingWatchdog() {
+        bufferingWatchdog?.cancel()
+        bufferingWatchdog = serviceScope.launch {
+            delay(7_000L)
+            val p = hostPlayer ?: return@launch
+            if (p.playbackState != Player.STATE_BUFFERING) return@launch
+            val progressed = p.currentPosition > lastPlayheadMs + 500
+            if (progressed) return@launch
+            Log.w(TAG, "[service] buffering watchdog — trying alternate stream")
+            tryFallbackOrSkip()
+        }
+    }
+
+    private fun cancelBufferingWatchdog() {
+        bufferingWatchdog?.cancel()
+        bufferingWatchdog = null
+    }
+
+    private fun tryFallbackOrSkip() {
+        val item = QueueController.currentItem() ?: run {
+            stopSelf()
+            return
+        }
+        val kind = currentStreamKind
+        StreamCache.invalidate(item.videoId)
+        val skip = buildSet {
+            kind?.let { add(it) }
+        }
+        if (skip.size < YoutubeStreamResolver.StreamKind.entries.size) {
+            Log.i(TAG, "[service] fallback resolve skip=$skip")
+            cancelBufferingWatchdog()
+            playJob?.cancel()
+            playJob = serviceScope.launch {
+                resolvingVideoId = item.videoId
+                try {
+                    val resolved = withContext(Dispatchers.IO) {
+                        YoutubeStreamResolver.resolveVideoId(
+                            item.videoId,
+                            applyWebViewCookies = true,
+                            preference = YoutubeStreamResolver.ResolvePreference.FAST_START,
+                            skipKinds = skip
+                        )
+                    }
+                    when (resolved) {
+                        is YoutubeStreamResolver.ResolveResult.Ok -> {
+                            StreamCache.put(item.videoId, resolved.stream)
+                            val mode = playbackMode()
+                            playResolvedStream(resolved.stream, item, mode, 0L)
+                        }
+                        else -> skipAfterError("Skipped — couldn't load video")
+                    }
+                } finally {
+                    resolvingVideoId = null
+                }
+            }
+        } else {
+            skipAfterError("Skipped — playback stalled")
+        }
+    }
+
     private fun onTrackEnded() {
         val next = QueueController.advanceToNext()
         if (next != null) {
-            startQueueItemJob(next, 0L)
+            PlaybackController.setLoading(next.title)
+            startQueueItemJob(next, 0L, force = true)
         } else {
             Log.i(TAG, "[service] queue ended")
         }
@@ -185,35 +315,35 @@ class CarTubePlaybackService : MediaSessionService() {
 
     private fun skipAfterError(notice: String) {
         broadcastNotice(notice)
+        PlaybackController.clearLoading()
         StreamCache.invalidate(PlaybackController.videoId)
         val next = QueueController.advanceToNext()
         if (next != null) {
-            startQueueItemJob(next, 0L)
+            PlaybackController.setLoading(next.title)
+            startQueueItemJob(next, 0L, force = true)
         } else {
             stopSelf()
         }
     }
 
-    private fun startQueueItemJob(item: QueueItem, seekMs: Long) {
-        if (resolvingVideoId == item.videoId && playJob?.isActive == true) {
-            Log.i(TAG, "[service] already resolving ${item.videoId}")
-            return
-        }
+    private fun startQueueItemJob(item: QueueItem, seekMs: Long, force: Boolean) {
+        prefetchJob?.cancel()
         playJob?.cancel()
         playJob = serviceScope.launch {
             resolvingVideoId = item.videoId
-            val mode = if (CarConnection.shouldAutoRouteToCar) {
-                PlaybackController.PlaybackMode.CAR
-            } else {
-                PlaybackController.PlaybackMode.PHONE_BACKGROUND
-            }
+            val mode = playbackMode()
             try {
-                val cached = StreamCache.get(item.videoId)
+                preparePlayerForSwitch()
+                val cached = if (!force) StreamCache.peek(item.videoId) else null
                 val resolved = if (cached != null) {
                     YoutubeStreamResolver.ResolveResult.Ok(cached)
                 } else {
                     withContext(Dispatchers.IO) {
-                        YoutubeStreamResolver.resolveVideoId(item.videoId, applyWebViewCookies = true)
+                        YoutubeStreamResolver.resolveVideoId(
+                            item.videoId,
+                            applyWebViewCookies = true,
+                            preference = YoutubeStreamResolver.ResolvePreference.FAST_START
+                        )
                     }
                 }
                 when (resolved) {
@@ -225,17 +355,12 @@ class CarTubePlaybackService : MediaSessionService() {
                     is YoutubeStreamResolver.ResolveResult.Ok -> {
                         StreamCache.put(item.videoId, resolved.stream)
                         playResolvedStream(resolved.stream, item, mode, seekMs)
-                        prefetchNextInQueue()
                     }
                 }
             } catch (_: CancellationException) {
                 Log.i(TAG, "[service] cancelled ${item.videoId}")
             } catch (e: Exception) {
                 Log.e(TAG, "[service] playback failed", e)
-                val msg = e.message?.take(80).orEmpty()
-                if (msg.isNotBlank() && !msg.contains("cancel", ignoreCase = true)) {
-                    broadcastErrorOnce(item.videoId, "Playback failed: $msg")
-                }
                 skipAfterError("Skipped — error")
             } finally {
                 if (resolvingVideoId == item.videoId) resolvingVideoId = null
@@ -243,15 +368,34 @@ class CarTubePlaybackService : MediaSessionService() {
         }
     }
 
-    private fun prefetchNextInQueue() {
+    private fun playbackMode(): PlaybackController.PlaybackMode =
+        if (CarConnection.shouldAutoRouteToCar) {
+            PlaybackController.PlaybackMode.CAR
+        } else {
+            PlaybackController.PlaybackMode.PHONE_BACKGROUND
+        }
+
+    private fun preparePlayerForSwitch() {
+        hostPlayer?.let { p ->
+            p.stop()
+            p.clearMediaItems()
+        }
+    }
+
+    private fun schedulePrefetchAfterReady() {
         prefetchJob?.cancel()
-        val next = QueueController.nextItem() ?: return
-        if (StreamCache.get(next.videoId) != null) return
-        prefetchJob = serviceScope.launch(Dispatchers.IO) {
-            Log.i(TAG, "[service] prefetch ${next.videoId}")
-            when (val r = YoutubeStreamResolver.resolveVideoId(next.videoId, applyWebViewCookies = true)) {
-                is YoutubeStreamResolver.ResolveResult.Ok -> StreamCache.put(next.videoId, r.stream)
-                else -> Log.w(TAG, "[service] prefetch miss ${next.videoId}")
+        prefetchJob = serviceScope.launch {
+            delay(400L)
+            val next = QueueController.nextItem() ?: return@launch
+            val current = QueueController.currentItem()?.videoId
+            if (next.videoId == current) return@launch
+            if (StreamCache.peek(next.videoId) != null) return@launch
+            Log.i(TAG, "[service] prefetch queue+1 ${next.videoId}")
+            withContext(Dispatchers.IO) {
+                when (val r = YoutubeStreamResolver.resolveVideoId(next.videoId, applyWebViewCookies = true)) {
+                    is YoutubeStreamResolver.ResolveResult.Ok -> StreamCache.put(next.videoId, r.stream)
+                    else -> Log.w(TAG, "[service] prefetch miss ${next.videoId}")
+                }
             }
         }
     }
@@ -262,6 +406,7 @@ class CarTubePlaybackService : MediaSessionService() {
         mode: PlaybackController.PlaybackMode,
         startPositionMs: Long
     ) {
+        currentStreamKind = stream.kind
         Log.i(TAG, "[service] play ${item.videoId} mode=$mode via=${stream.via}")
         ensureSessionAndPlayer()
         val exo = hostPlayer ?: return
@@ -300,6 +445,8 @@ class CarTubePlaybackService : MediaSessionService() {
     private fun stopPlayback() {
         playJob?.cancel()
         playJob = null
+        prefetchJob?.cancel()
+        cancelBufferingWatchdog()
         resolvingVideoId = null
         PlaybackController.detachAndRelease()
         mediaSession?.release()
@@ -318,20 +465,26 @@ class CarTubePlaybackService : MediaSessionService() {
     }
 
     private fun updateNotification() {
-        val title = PlaybackController.title.ifBlank { getString(R.string.app_name) }
+        val title = when {
+            PlaybackController.isLoading -> getString(R.string.loading_title, PlaybackController.loadingTitle)
+            else -> PlaybackController.title.ifBlank { getString(R.string.app_name) }
+        }
         val playing = hostPlayer?.isPlaying == true
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.notify(NOTIFICATION_ID, buildNotification(title, playing))
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification(title, playing))
     }
 
     private fun notificationBody(): String {
-        val buffer = if (isBuffering) " · Buffering…" else ""
-        return when (PlaybackController.playbackMode) {
-            PlaybackController.PlaybackMode.PHONE_BACKGROUND ->
-                getString(R.string.notification_playing_phone) + buffer
-            PlaybackController.PlaybackMode.CAR ->
-                getString(R.string.notification_playing_on_car) + buffer
+        val buffer = when {
+            PlaybackController.isLoading -> ""
+            isBuffering -> " · Buffering…"
+            else -> ""
         }
+        val base = when (PlaybackController.playbackMode) {
+            PlaybackController.PlaybackMode.PHONE_BACKGROUND -> getString(R.string.notification_playing_phone)
+            PlaybackController.PlaybackMode.CAR -> getString(R.string.notification_playing_on_car)
+        }
+        return base + buffer
     }
 
     private fun broadcastErrorOnce(videoId: String, message: String) {
@@ -375,7 +528,7 @@ class CarTubePlaybackService : MediaSessionService() {
             .setContentTitle(title)
             .setContentText(notificationBody())
             .setContentIntent(contentIntent)
-            .setOngoing(playing)
+            .setOngoing(playing || PlaybackController.isLoading)
             .setOnlyAlertOnce(true)
             .addAction(
                 actionIcon, if (playing) "Pause" else "Play",

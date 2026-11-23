@@ -20,6 +20,7 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var surfaceAttached = false
+    private var attachedSurface: android.view.Surface? = null
     private val playbackListener = { invalidate() }
     private val tick = object : Runnable {
         override fun run() {
@@ -36,11 +37,6 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
                 mainHandler.post(tick)
             }
 
-            override fun onStop(owner: LifecycleOwner) {
-                PlaybackController.releaseCarSurface()
-                surfaceAttached = false
-            }
-
             override fun onDestroy(owner: LifecycleOwner) {
                 mainHandler.removeCallbacks(tick)
                 PlaybackController.removePlaybackListener(playbackListener)
@@ -51,6 +47,8 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         val surface = surfaceContainer.surface ?: return
+        if (attachedSurface === surface) return
+        attachedSurface = surface
         Log.i(CarTubePlaybackService.TAG, "[car] surface available")
         PlaybackController.attachCarSurface(surface)
         surfaceAttached = true
@@ -58,7 +56,9 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     }
 
     override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
+        if (attachedSurface != null && surfaceContainer.surface !== attachedSurface) return
         surfaceAttached = false
+        attachedSurface = null
         PlaybackController.releaseCarSurface()
     }
 

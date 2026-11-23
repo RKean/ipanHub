@@ -1,6 +1,10 @@
 <resources>
     <string name="app_name">CarTube</string>
     <string name="search_hint">Search for a song or video</string>
+    <string name="fill_search">Fill search field</string>
+    <string name="remove_recent">Remove recent search</string>
+    <string name="loading_title">Loading %1$s</string>
+    <string name="loading_subtitle">Starting playback…</string>
     <string name="search_prompt">Search and tap a result to play on the car</string>
     <string name="search_no_results">No results — try different words</string>
     <string name="tab_search">Search</string>

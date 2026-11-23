@@ -44,7 +44,12 @@ object YoutubeStreamResolver {
         return resolveVideoId(videoId, applyWebViewCookies)
     }
 
-    private fun resolveWithNewPipe(watchUrl: String, applyWebViewCookies: Boolean): ResolveResult {
+    private fun resolveWithNewPipe(
+        watchUrl: String,
+        applyWebViewCookies: Boolean,
+        preference: ResolvePreference,
+        skipKinds: Set<StreamKind>
+    ): ResolveResult {
         val downloader = NewPipeDownloader.getInstance()
         downloader.userAgent = NewPipeDownloader.DEFAULT_USER_AGENT
 
@@ -60,7 +65,7 @@ object YoutubeStreamResolver {
         for ((label, cookies) in attempts) {
             downloader.cookies = cookies
             Log.i(TAG, "[resolve] newpipe attempt=$label url=$watchUrl cookieLen=${cookies.length}")
-            when (val fetched = fetchPage(watchUrl)) {
+            when (val fetched = fetchPage(watchUrl, preference, skipKinds)) {
                 is ResolveResult.Err -> {
                     lastErr = fetched
                     continue
@@ -71,7 +76,19 @@ object YoutubeStreamResolver {
         return lastErr ?: ResolveResult.Err("newpipe", "No NewPipe attempts ran")
     }
 
-    fun resolveVideoId(videoId: String, applyWebViewCookies: Boolean = true): ResolveResult {
+    enum class ResolvePreference {
+        /** HLS / muxed first for faster start on AA. */
+        FAST_START,
+        /** Merge 720p preferred. */
+        QUALITY,
+    }
+
+    fun resolveVideoId(
+        videoId: String,
+        applyWebViewCookies: Boolean = true,
+        preference: ResolvePreference = ResolvePreference.FAST_START,
+        skipKinds: Set<StreamKind> = emptySet()
+    ): ResolveResult {
         if (videoId.isBlank()) {
             return ResolveResult.Err("videoId", "Empty video id")
         }
@@ -84,7 +101,7 @@ object YoutubeStreamResolver {
         }
         val watchUrl = YouTubeUrlParser.toWatchUrl(videoId)
         val cookiesSnapshot = NewPipeDownloader.getInstance().cookies
-        val newPipe = resolveWithNewPipe(watchUrl, applyWebViewCookies)
+        val newPipe = resolveWithNewPipe(watchUrl, applyWebViewCookies, preference, skipKinds)
         if (newPipe is ResolveResult.Ok) return newPipe
 
         Log.i(TAG, "[resolve] NewPipe failed, trying InnerTube fallback for $videoId")
@@ -116,17 +133,21 @@ object YoutubeStreamResolver {
             .getOrElse { NewPipe.init(NewPipeDownloader.getInstance()) }
     }
 
-    private fun fetchPage(watchUrl: String): ResolveResult {
+    private fun fetchPage(
+        watchUrl: String,
+        preference: ResolvePreference,
+        skipKinds: Set<StreamKind>
+    ): ResolveResult {
         return try {
             val service = NewPipe.getService(ServiceList.YouTube.serviceId)
             val extractor = service.getStreamExtractor(watchUrl)
             fetchPageWithRetries(extractor)
-            val fromExtractor = pickStream(extractor, "StreamExtractor")
+            val fromExtractor = pickStream(extractor, "StreamExtractor", preference, skipKinds)
             if (fromExtractor != null) return ResolveResult.Ok(fromExtractor)
 
             Log.i(TAG, "[resolve] extractor empty, trying StreamInfo.getInfo")
             val info = StreamInfo.getInfo(service, watchUrl)
-            val fromInfo = pickStreamFromInfo(info)
+            val fromInfo = pickStreamFromInfo(info, preference, skipKinds)
             if (fromInfo != null) return ResolveResult.Ok(fromInfo)
 
             ResolveResult.Err(
@@ -158,7 +179,12 @@ object YoutubeStreamResolver {
         }
     }
 
-    private fun pickStream(extractor: StreamExtractor, source: String): ResolvedStream? =
+    private fun pickStream(
+        extractor: StreamExtractor,
+        source: String,
+        preference: ResolvePreference,
+        skipKinds: Set<StreamKind>
+    ): ResolvedStream? =
         pickStreamFromInfoLike(
             hls = safeString { extractor.hlsUrl },
             dash = safeString { extractor.dashMpdUrl },
@@ -166,17 +192,25 @@ object YoutubeStreamResolver {
                 .filter { !it.isVideoOnly },
             videoOnly = safeList { extractor.videoOnlyStreams },
             audio = safeList { extractor.audioStreams },
-            source = source
+            source = source,
+            preference = preference,
+            skipKinds = skipKinds
         )
 
-    private fun pickStreamFromInfo(info: StreamInfo): ResolvedStream? =
+    private fun pickStreamFromInfo(
+        info: StreamInfo,
+        preference: ResolvePreference,
+        skipKinds: Set<StreamKind>
+    ): ResolvedStream? =
         pickStreamFromInfoLike(
             hls = info.hlsUrl?.takeIf { it.isNotBlank() },
             dash = info.dashMpdUrl?.takeIf { it.isNotBlank() },
             muxed = info.videoStreams?.filter { !it.isVideoOnly }.orEmpty(),
             videoOnly = info.videoOnlyStreams.orEmpty(),
             audio = info.audioStreams.orEmpty(),
-            source = "StreamInfo"
+            source = "StreamInfo",
+            preference = preference,
+            skipKinds = skipKinds
         )
 
     private fun pickStreamFromInfoLike(
@@ -186,51 +220,56 @@ object YoutubeStreamResolver {
         videoOnly: List<VideoStream>,
         audio: List<AudioStream>,
         source: String,
+        preference: ResolvePreference,
+        skipKinds: Set<StreamKind>,
     ): ResolvedStream? {
         Log.i(
             TAG,
             "[resolve] $source counts muxed=${muxed.size} videoOnly=${videoOnly.size} " +
-                "audio=${audio.size} hls=${!hls.isNullOrBlank()} dash=${!dash.isNullOrBlank()}"
+                "audio=${audio.size} hls=${!hls.isNullOrBlank()} dash=${!dash.isNullOrBlank()} pref=$preference"
         )
 
-        pickMerge(videoOnly, audio)?.let { (vStream, aStream) ->
-            return ResolvedStream(
-                StreamKind.MERGED_PROGRESSIVE,
-                vStream.content,
-                secondaryUrl = aStream.content,
-                mimeType = null,
-                via = "$source/merge-${vStream.height}p+h264"
-            )
-        }
-
-        pickMuxed(muxed)?.let { picked ->
-            val height = muxed.filter { it.content == picked }.maxOfOrNull { it.height } ?: 0
-            return ResolvedStream(
-                StreamKind.PROGRESSIVE_MUXED,
-                picked,
-                mimeType = null,
-                via = "$source/muxed-${height}p"
-            )
-        }
-
-        if (!hls.isNullOrBlank()) {
-            return ResolvedStream(
+        val ordered = if (preference == ResolvePreference.FAST_START) {
+            listOf(
                 StreamKind.HLS,
-                hls,
-                mimeType = MimeTypes.APPLICATION_M3U8,
-                via = "$source/hls"
+                StreamKind.PROGRESSIVE_MUXED,
+                StreamKind.MERGED_PROGRESSIVE,
+                StreamKind.DASH
+            )
+        } else {
+            listOf(
+                StreamKind.MERGED_PROGRESSIVE,
+                StreamKind.PROGRESSIVE_MUXED,
+                StreamKind.HLS,
+                StreamKind.DASH
             )
         }
 
-        if (!dash.isNullOrBlank()) {
-            return ResolvedStream(
-                StreamKind.DASH,
-                dash,
-                mimeType = MimeTypes.APPLICATION_MPD,
-                via = "$source/dash"
-            )
+        for (kind in ordered) {
+            if (kind in skipKinds) continue
+            val stream = when (kind) {
+                StreamKind.HLS -> hls?.takeIf { it.isNotBlank() }?.let {
+                    ResolvedStream(StreamKind.HLS, it, mimeType = MimeTypes.APPLICATION_M3U8, via = "$source/hls")
+                }
+                StreamKind.PROGRESSIVE_MUXED -> pickMuxed(muxed)?.let { picked ->
+                    val height = muxed.filter { s -> s.content == picked }.maxOfOrNull { it.height } ?: 0
+                    ResolvedStream(StreamKind.PROGRESSIVE_MUXED, picked, mimeType = null, via = "$source/muxed-${height}p")
+                }
+                StreamKind.MERGED_PROGRESSIVE -> pickMerge(videoOnly, audio)?.let { (v, a) ->
+                    ResolvedStream(
+                        StreamKind.MERGED_PROGRESSIVE,
+                        v.content,
+                        secondaryUrl = a.content,
+                        mimeType = null,
+                        via = "$source/merge-${v.height}p+h264"
+                    )
+                }
+                StreamKind.DASH -> dash?.takeIf { it.isNotBlank() }?.let {
+                    ResolvedStream(StreamKind.DASH, it, mimeType = MimeTypes.APPLICATION_MPD, via = "$source/dash")
+                }
+            }
+            if (stream != null) return stream
         }
-
         return null
     }
 

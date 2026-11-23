@@ -4,6 +4,12 @@ Personal-use Android app: **co-driver picks songs on the phone**, **video plays 
 
 > **Safety:** Use only while **parked**.
 
+## v1.2.1 — Search suggestions + playback
+
+- **YouTube-style autocomplete** under the search bar (NewPipe `SuggestionExtractor`, Google suggest fallback), 250ms debounce, stale request cancel
+- **Recent searches** when the field is empty (tap to search, arrow to fill, X to remove)
+- Faster track switches, buffering watchdog, HLS-first resolve, loading state on notification/mini-player
+
 ## v1.2.0 — Remote + queue
 
 | Surface | Behavior |

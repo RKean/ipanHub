@@ -74,6 +74,26 @@
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/suggestionsCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="4dp"
+            android:maxHeight="220dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/md_theme_surface_container_high"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/suggestionsList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="true"
+                android:overScrollMode="never" />
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/tabChips"
             android:layout_width="match_parent"

@@ -38,4 +38,17 @@ object StreamCache {
     fun invalidate(videoId: String) {
         map.remove(videoId)
     }
+
+    /** Background resolve (e.g. on queue-add or search long-press). */
+    fun warmResolve(videoId: String) {
+        if (videoId.isBlank() || get(videoId) != null) return
+        Thread {
+            when (val r = YoutubeStreamResolver.resolveVideoId(videoId, applyWebViewCookies = true)) {
+                is YoutubeStreamResolver.ResolveResult.Ok -> put(videoId, r.stream)
+                else -> Log.d(TAG, "[cache] warm miss $videoId")
+            }
+        }.start()
+    }
+
+    fun peek(videoId: String): YoutubeStreamResolver.ResolvedStream? = get(videoId)
 }
