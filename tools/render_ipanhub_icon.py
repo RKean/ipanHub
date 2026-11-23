@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render 512×512 ipanHub launcher icon (concept #3) to PNG."""
+"""Render 512×512 ipanHub launcher icon — matches ic_launcher_foreground geometry."""
 from __future__ import annotations
 
 import math
@@ -11,65 +11,69 @@ SIZE = 512
 BG = "#1A1A1A"
 YELLOW = "#FFC107"
 SCALE = SIZE / 108.0
+CX, CY = 54.0, 54.0
+R_OUT = 30.0
+R_IN = 16.5
+STROKE_OUT = 6.5
+STROKE_IN = 2.2
 
 
-def scale(x: float, y: float) -> tuple[float, float]:
+def s(x: float, y: float) -> tuple[float, float]:
     return x * SCALE, y * SCALE
 
 
-def hex_vertices(cx: float, cy: float, r: float) -> list[tuple[float, float]]:
+def hex_pts(r: float) -> list[tuple[float, float]]:
     return [
-        scale(cx + r * math.cos(math.radians(-90 + i * 60)), cy + r * math.sin(math.radians(-90 + i * 60)))
+        s(CX + r * math.cos(math.radians(-90 + i * 60)), CY + r * math.sin(math.radians(-90 + i * 60)))
         for i in range(6)
     ]
+
+
+def stroke_segment(draw: ImageDraw.ImageDraw, a, b, width: float) -> None:
+    draw.line([a, b], fill=YELLOW, width=max(1, int(width)), joint="curve")
 
 
 def main() -> None:
     img = Image.new("RGB", (SIZE, SIZE), BG)
     draw = ImageDraw.Draw(img)
-    w = max(2, int(3.8 * SCALE))
+    ow = STROKE_OUT * SCALE
+    iw = STROKE_IN * SCALE
 
-    outer = hex_vertices(54, 54, 36)
-  # Broken stroke at bottom-right (indices 1→2) for music note
+    outer = hex_pts(R_OUT)
+    # Gap at vertex 2 (bottom-right): stop edge 1→2 at y=61.5; start edge 2→3 at (73.5, 72.75)
+    gap_end = s(79.98, 61.5)
+    gap_start = s(73.5, 72.75)
+    stroke_segment(draw, outer[5], outer[0], ow)
+    stroke_segment(draw, outer[0], outer[1], ow)
+    stroke_segment(draw, outer[1], gap_end, ow)
+    stroke_segment(draw, gap_start, outer[3], ow)
+    stroke_segment(draw, outer[3], outer[4], ow)
+    stroke_segment(draw, outer[4], outer[5], ow)
+
+    inner = hex_pts(R_IN)
     for i in range(6):
-        a, b = outer[i], outer[(i + 1) % 6]
-        if i == 1:
-            bx, by = b
-            draw.line([a, (bx - 8 * SCALE, by - 6 * SCALE)], fill=YELLOW, width=w)
-        elif i == 2:
-            ax, ay = a
-            draw.line([(ax + 4 * SCALE, ay + 4 * SCALE), b], fill=YELLOW, width=w)
-        else:
-            draw.line([a, b], fill=YELLOW, width=w)
+        stroke_segment(draw, inner[i], inner[(i + 1) % 6], iw)
 
-    inner = hex_vertices(54, 54, 16)
-    wi = max(1, int(2 * SCALE))
-    for i in range(6):
-        draw.line([inner[i], inner[(i + 1) % 6]], fill=YELLOW, width=wi)
-
-    dot_r = max(2, int(2.8 * SCALE))
+    dot_r = 2.2 * SCALE
     for x, y in inner:
         draw.ellipse([x - dot_r, y - dot_r, x + dot_r, y + dot_r], fill=YELLOW)
 
-    tri = [scale(47, 47), scale(47, 61), scale(62, 54)]
+    tri = [s(49, 48), s(49, 60), s(63, 54)]
     draw.polygon(tri, fill=YELLOW)
 
-    # Eighth-note pair (BR)
-    hx, hy = scale(76, 74)
-    hr = max(3, int(3.2 * SCALE))
-    draw.ellipse([hx - hr, hy - hr, hx + hr, hy + hr], fill=YELLOW)
-    sx, sy = scale(78.5, 74)
-    tx, ty = scale(78.5, 58)
-    draw.line([(sx, sy), (tx, ty)], fill=YELLOW, width=max(2, int(2.2 * SCALE)))
+    # Beamed eighth-note pair
+    def oval(cx: float, cy: float, rx: float, ry: float) -> None:
+        x, y = s(cx, cy)
+        draw.ellipse([x - rx * SCALE, y - ry * SCALE, x + rx * SCALE, y + ry * SCALE], fill=YELLOW)
 
-    hx2, hy2 = scale(84, 76)
-    hr2 = max(2, int(2.8 * SCALE))
-    draw.ellipse([hx2 - hr2, hy2 - hr2, hx2 + hr2, hy2 + hr2], fill=YELLOW)
-    sx2, sy2 = scale(85.5, 76)
-    tx2, ty2 = scale(85.5, 62)
-    draw.line([(sx2, sy2), (tx2, ty2)], fill=YELLOW, width=max(2, int(2 * SCALE)))
-    draw.line([scale(78.5, 58), scale(88, 52)], fill=YELLOW, width=max(2, int(2 * SCALE)))
-    draw.line([scale(85.5, 62), scale(93, 57)], fill=YELLOW, width=max(2, int(1.8 * SCALE)))
+    oval(71.2, 67.2, 2.3, 1.7)
+    oval(75.3, 70.2, 2.1, 1.5)
+    sw = max(2, int(2.4 * SCALE))
+    draw.line([s(72.2, 65.8), s(72.2, 56.8)], fill=YELLOW, width=sw)
+    draw.line([s(76.1, 68.8), s(76.1, 56.8)], fill=YELLOW, width=sw)
+    bx0, by0 = s(70.8, 56.8)
+    bx1, by1 = s(78.0, 59.6)
+    draw.rounded_rectangle([bx0, by0, bx1, by1], radius=int(0.6 * SCALE), fill=YELLOW)
 
     out = Path("/opt/cursor/artifacts/ipanhub-icon.png")
     out.parent.mkdir(parents=True, exist_ok=True)
