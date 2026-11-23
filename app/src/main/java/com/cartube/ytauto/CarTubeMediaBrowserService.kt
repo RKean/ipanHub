@@ -26,7 +26,9 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
                     .setActions(
                         PlaybackStateCompat.ACTION_PLAY or
                             PlaybackStateCompat.ACTION_PAUSE or
-                            PlaybackStateCompat.ACTION_SEEK_TO
+                            PlaybackStateCompat.ACTION_SEEK_TO or
+                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
                     )
                     .setState(PlaybackStateCompat.STATE_NONE, 0, 0f)
                     .build()
@@ -88,7 +90,9 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
                         PlaybackStateCompat.ACTION_PAUSE or
-                        PlaybackStateCompat.ACTION_SEEK_TO
+                        PlaybackStateCompat.ACTION_SEEK_TO or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
                 )
                 .setState(state, player?.currentPosition ?: 0L, 1f)
                 .build()
@@ -128,6 +132,18 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
 
         override fun onSeekTo(pos: Long) {
             PlaybackController.player?.seekTo(pos)
+            syncPlaybackState()
+        }
+
+        override fun onSkipToNext() {
+            if (!com.cartube.ytauto.queue.QueueController.hasNext()) return
+            CarTubePlaybackService.requestSkipNext(this@CarTubeMediaBrowserService)
+            syncPlaybackState()
+        }
+
+        override fun onSkipToPrevious() {
+            if (!com.cartube.ytauto.queue.QueueController.hasPrevious()) return
+            CarTubePlaybackService.requestSkipPrevious(this@CarTubeMediaBrowserService)
             syncPlaybackState()
         }
     }

@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.session.MediaStyleNotificationHelper
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -59,7 +60,37 @@ class CarTubePlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
             CarTubeLog.i("[session] connect pkg=${controller.packageName} ${PlaybackEngine.playerHashLabel()}")
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+            val playerCommands = Player.Commands.Builder()
+                .addAll(
+                    Player.COMMAND_PLAY_PAUSE,
+                    Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                )
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailablePlayerCommands(playerCommands)
+                .build()
+        }
+
+        override fun onPlayerCommandRequest(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            playerCommand: Int
+        ): Int {
+            return when (playerCommand) {
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                    if (!QueueController.hasNext()) return Player.COMMAND_INVALID
+                    skipQueue(1)
+                    playerCommand
+                }
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                    if (!QueueController.hasPrevious()) return Player.COMMAND_INVALID
+                    skipQueue(-1)
+                    playerCommand
+                }
+                else -> super.onPlayerCommandRequest(session, controller, playerCommand)
+            }
         }
     }
 
@@ -148,6 +179,8 @@ class CarTubePlaybackService : MediaSessionService() {
     }
 
     private fun skipQueue(delta: Int) {
+        if (delta > 0 && !QueueController.hasNext()) return
+        if (delta < 0 && !QueueController.hasPrevious()) return
         prefetchJob?.cancel()
         val item = when {
             delta > 0 -> QueueController.advanceToNext()
@@ -551,30 +584,53 @@ class CarTubePlaybackService : MediaSessionService() {
         )
         val toggle = if (playing) ACTION_MEDIA_PAUSE else ACTION_MEDIA_PLAY
         val actionIcon = if (playing) R.drawable.ic_pause else R.drawable.ic_play
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val canPrev = QueueController.hasPrevious()
+        val canNext = QueueController.hasNext()
+        val prevAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_skip_previous,
+            getString(R.string.skip_previous),
+            PendingIntent.getService(
+                this, 2,
+                Intent(this, CarTubePlaybackService::class.java).setAction(ACTION_SKIP_PREVIOUS),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        ).setShowsUserInterface(false).build()
+        val playAction = NotificationCompat.Action.Builder(
+            actionIcon,
+            if (playing) getString(R.string.notification_pause) else getString(R.string.notification_play),
+            PendingIntent.getService(
+                this, 1,
+                Intent(this, CarTubePlaybackService::class.java).setAction(toggle),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        ).setShowsUserInterface(false).build()
+        val nextAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_skip_next,
+            getString(R.string.skip_next),
+            PendingIntent.getService(
+                this, 3,
+                Intent(this, CarTubePlaybackService::class.java).setAction(ACTION_SKIP_NEXT),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        ).setShowsUserInterface(false).build()
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(notificationBody())
             .setContentIntent(contentIntent)
             .setOngoing(playing || PlaybackController.isLoading)
             .setOnlyAlertOnce(true)
-            .addAction(
-                actionIcon, if (playing) "Pause" else "Play",
-                PendingIntent.getService(
-                    this, 1,
-                    Intent(this, CarTubePlaybackService::class.java).setAction(toggle),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(prevAction)
+            .addAction(playAction)
+            .addAction(nextAction)
+        PlaybackEngine.mediaSession()?.let { session ->
+            builder.setStyle(
+                MediaStyleNotificationHelper.MediaStyle(session)
+                    .setShowActionsInCompactView(0, 1, 2)
             )
-            .addAction(
-                R.drawable.ic_skip_forward, "Next",
-                PendingIntent.getService(
-                    this, 3,
-                    Intent(this, CarTubePlaybackService::class.java).setAction(ACTION_SKIP_NEXT),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-            )
-            .build()
+        }
+        return builder.build()
     }
 
     companion object {

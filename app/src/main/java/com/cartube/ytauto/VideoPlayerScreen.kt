@@ -14,6 +14,7 @@ import androidx.car.app.navigation.model.NavigationTemplate
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.cartube.ytauto.queue.QueueController
 
 class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), SurfaceCallback {
 
@@ -67,18 +68,20 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     override fun buildTemplate(): Template {
         val player = PlaybackController.player
         val playing = player?.isPlaying == true
+        val canPrev = QueueController.hasPrevious()
+        val canNext = QueueController.hasNext()
 
         return NavigationTemplate.Builder()
             .setActionStrip(
                 ActionStrip.Builder()
-                    .addAction(iconAction(R.drawable.ic_skip_back) {
+                    .addAction(carSkipAction(R.drawable.ic_car_skip_previous, canPrev) {
                         CarTubePlaybackService.requestSkipPrevious(carContext)
                     })
-                    .addAction(iconAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play) {
+                    .addAction(carSkipAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play, enabled = true) {
                         player?.let { if (it.isPlaying) it.pause() else it.play() }
                         invalidate()
                     })
-                    .addAction(iconAction(R.drawable.ic_skip_forward) {
+                    .addAction(carSkipAction(R.drawable.ic_car_skip_next, canNext) {
                         CarTubePlaybackService.requestSkipNext(carContext)
                     })
                     .build()
@@ -86,10 +89,13 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
             .build()
     }
 
-    private fun iconAction(iconRes: Int, onClick: () -> Unit): Action {
+    /** Car action-strip icons: pre-tinted white vectors, no runtime tint (AA clips badly). */
+    private fun carSkipAction(iconRes: Int, enabled: Boolean, onClick: () -> Unit): Action {
+        val icon = IconCompat.createWithResource(carContext, iconRes)
         return Action.Builder()
-            .setIcon(CarIcon.Builder(IconCompat.createWithResource(carContext, iconRes)).build())
-            .setOnClickListener(onClick)
+            .setIcon(CarIcon.Builder(icon).build())
+            .setEnabled(enabled)
+            .setOnClickListener { if (enabled) onClick() }
             .build()
     }
 }

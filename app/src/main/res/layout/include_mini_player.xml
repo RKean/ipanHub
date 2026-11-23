@@ -76,12 +76,24 @@
             android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/queuePrevious"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@string/skip_previous"
+                app:icon="@drawable/ic_skip_previous"
+                app:iconTint="@color/md_theme_primary"
+                app:iconSize="24dp" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/seekBack10"
                 style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                app:icon="@drawable/ic_skip_back"
-                app:iconTint="@color/md_theme_on_surface" />
+                android:contentDescription="@string/replay_10"
+                app:icon="@drawable/ic_replay_10"
+                app:iconTint="@color/md_theme_on_surface"
+                app:iconSize="24dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/miniPlayPause"
@@ -96,16 +108,20 @@
                 style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                app:icon="@drawable/ic_skip_forward"
-                app:iconTint="@color/md_theme_on_surface" />
+                android:contentDescription="@string/forward_10"
+                app:icon="@drawable/ic_forward_10"
+                app:iconTint="@color/md_theme_on_surface"
+                app:iconSize="24dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/queueNext"
                 style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                app:icon="@drawable/ic_skip_forward"
-                app:iconTint="@color/md_theme_primary" />
+                android:contentDescription="@string/skip_next"
+                app:icon="@drawable/ic_skip_next"
+                app:iconTint="@color/md_theme_primary"
+                app:iconSize="24dp" />
         </LinearLayout>
 
         <TextView

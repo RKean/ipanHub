@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Car / AA action strip: filled skip_next, white, 24dp safe geometry -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,19L8,5L16,12Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,5h2.5v14H18V5z" />
+</vector>

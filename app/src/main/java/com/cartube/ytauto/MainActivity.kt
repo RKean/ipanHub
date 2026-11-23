@@ -289,6 +289,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.seekForward10).setOnClickListener {
             PlaybackClient.seekBy(10_000L)
         }
+        findViewById<MaterialButton>(R.id.queuePrevious).setOnClickListener {
+            QueuePlayback.skipPrevious(this)
+        }
         findViewById<MaterialButton>(R.id.queueNext).setOnClickListener {
             QueuePlayback.skipNext(this)
         }
@@ -444,6 +447,12 @@ class MainActivity : AppCompatActivity() {
             miniTitle.text = getString(R.string.nothing_playing)
             miniChannel.text = getString(R.string.mini_player_subtitle)
         }
+        val queuePrev = findViewById<MaterialButton>(R.id.queuePrevious)
+        val queueNext = findViewById<MaterialButton>(R.id.queueNext)
+        queuePrev.isEnabled = QueueController.hasPrevious()
+        queueNext.isEnabled = QueueController.hasNext()
+        queuePrev.alpha = if (queuePrev.isEnabled) 1f else 0.38f
+        queueNext.alpha = if (queueNext.isEnabled) 1f else 0.38f
         if (!active && !PlaybackController.isLoading) return
         miniPlayPause.setIconResource(
             if (PlaybackClient.isPlaying()) R.drawable.ic_pause else R.drawable.ic_play
