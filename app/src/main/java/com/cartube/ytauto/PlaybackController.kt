@@ -7,8 +7,11 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 object PlaybackController {
     var player: ExoPlayer? = null
+        private set
     var title: String = ""
+        private set
     var videoId: String = ""
+        private set
 
     private var carSurface: Surface? = null
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
@@ -38,13 +41,18 @@ object PlaybackController {
         playbackListeners.forEach { it.invoke() }
     }
 
-    fun setPlayer(
+    /** Called by [CarTubePlaybackService] only. */
+    fun attachPlayer(
         exo: ExoPlayer,
         videoTitle: String,
         id: String,
         onSurfaceReady: CompletableDeferred<Unit>? = null
     ) {
-        releasePlayerOnly()
+        val previous = player
+        if (previous != null && previous !== exo) {
+            previous.clearVideoSurface()
+            previous.release()
+        }
         player = exo
         title = videoTitle
         videoId = id
@@ -68,7 +76,7 @@ object PlaybackController {
         }
     }
 
-    fun releasePlayerOnly() {
+    fun detachAndRelease() {
         player?.clearVideoSurface()
         player?.release()
         player = null
@@ -76,10 +84,6 @@ object PlaybackController {
         videoId = ""
         surfaceReadySignal = null
         notifyListeners()
-    }
-
-    fun releaseAll() {
-        releasePlayerOnly()
     }
 
     val hasActivePlayback: Boolean

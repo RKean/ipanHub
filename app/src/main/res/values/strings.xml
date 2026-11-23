@@ -5,4 +5,8 @@
     <string name="parked_only_hint">For safety, use only while parked.</string>
     <string name="send_to_car">Send to car</string>
     <string name="now_playing_on_car">Now playing on Android Auto</string>
+    <string name="notification_channel_name">CarTube playback</string>
+    <string name="notification_channel_desc">Shows when video is playing on Android Auto</string>
+    <string name="notification_playing_on_car">Playing on your car screen</string>
+    <string name="notification_stop">Stop</string>
 </resources>
