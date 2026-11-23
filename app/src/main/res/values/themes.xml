@@ -1,7 +1,12 @@
 <resources>
-    <style name="Theme.CarTube" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="colorPrimary">#FF0000</item>
-        <item name="colorPrimaryDark">#CC0000</item>
-        <item name="android:statusBarColor">#CC0000</item>
+    <style name="Theme.CarTube" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/md_theme_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_on_primary</item>
+        <item name="android:colorBackground">@color/md_theme_surface</item>
+        <item name="colorSurface">@color/md_theme_surface</item>
+        <item name="colorOnSurface">@color/md_theme_on_surface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

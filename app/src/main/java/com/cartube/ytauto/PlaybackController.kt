@@ -1,6 +1,7 @@
 package com.cartube.ytauto
 
 import android.view.Surface
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.CopyOnWriteArrayList
@@ -24,6 +25,7 @@ object PlaybackController {
 
     private var carSurface: Surface? = null
     private var surfaceReadySignal: CompletableDeferred<Unit>? = null
+    private var fanOutListener: Player.Listener? = null
 
     private val playbackListeners = CopyOnWriteArrayList<() -> Unit>()
 
@@ -58,6 +60,7 @@ object PlaybackController {
         onSurfaceReady: CompletableDeferred<Unit>? = null
     ) {
         val previous = player
+        fanOutListener?.let { listener -> previous?.removeListener(listener) }
         if (previous != null && previous !== exo) {
             previous.clearVideoSurface()
             previous.release()
@@ -67,6 +70,15 @@ object PlaybackController {
         title = videoTitle
         videoId = id
         surfaceReadySignal = onSurfaceReady
+        fanOutListener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) = notifyListeners()
+            override fun onPlaybackStateChanged(playbackState: Int) = notifyListeners()
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) = notifyListeners()
+        }.also { exo.addListener(it) }
         carSurface?.let {
             exo.setVideoSurface(it)
             surfaceReadySignal?.complete(Unit)
@@ -88,6 +100,8 @@ object PlaybackController {
     }
 
     fun detachAndRelease() {
+        fanOutListener?.let { player?.removeListener(it) }
+        fanOutListener = null
         player?.clearVideoSurface()
         player?.release()
         player = null

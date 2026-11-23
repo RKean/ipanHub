@@ -1,65 +1,153 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/md_theme_surface">
 
-    <TextView
-        android:id="@+id/installBanner"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:background="#FFF3E0"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="10dp"
-        android:textColor="#E65100"
-        android:textSize="12sp"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="8dp"
-        android:text="@string/phone_hint"
-        android:textSize="13sp"
-        app:layout_constraintEnd_toStartOf="@id/sendToCarButton"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/installBanner" />
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/md_theme_surface_container_high"
+            app:title="@string/app_name"
+            app:titleTextColor="@color/md_theme_on_surface" />
 
-    <Button
-        android:id="@+id/sendToCarButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="12dp"
-        android:text="@string/send_to_car"
-        app:layout_constraintBaseline_toBaselineOf="@id/statusText"
-        app:layout_constraintEnd_toEndOf="parent" />
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/searchLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="4dp"
+            android:hint="@string/search_hint"
+            app:boxBackgroundColor="@color/md_theme_surface_container"
+            app:startIconDrawable="@android:drawable/ic_menu_search">
 
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="0dp"
-        android:layout_height="4dp"
-        android:indeterminate="false"
-        android:max="100"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/statusText" />
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/searchInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLines="1"
+                android:textColor="@color/md_theme_on_surface" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-    <WebView
-        android:id="@+id/webView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/progressBar" />
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/installBannerCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="6dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/banner_warn"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    android:id="@+id/installBanner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="@color/banner_warn_text"
+                    android:textSize="12sp" />
+
+                <ImageButton
+                    android:id="@+id/installBannerDismiss"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/dismiss"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    app:tint="@color/banner_warn_text" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progressBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:indeterminate="false"
+            android:max="100"
+            android:visibility="gone"
+            app:indicatorColor="@color/md_theme_primary"
+            app:trackColor="@color/md_theme_outline" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <WebView
+                android:id="@+id/webView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/carRemoteOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_margin="12dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="#CC1E1E1E"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/remote_playing_on_car"
+                        android:textColor="@color/md_theme_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/remoteTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textColor="@color/md_theme_on_surface"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:id="@+id/remoteSub"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/webview_silenced_hint"
+                        android:textColor="@color/md_theme_outline"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </FrameLayout>
+
+        <include
+            android:id="@+id/miniPlayer"
+            layout="@layout/include_mini_player" />
+    </LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

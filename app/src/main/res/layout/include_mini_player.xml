@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="@color/md_theme_surface_container_high"
+    app:cardCornerRadius="0dp"
+    app:cardElevation="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/miniThumb"
+                android:layout_width="56dp"
+                android:layout_height="42dp"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Small"
+                app:srcCompat="@drawable/ic_launcher_foreground" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/miniTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/nothing_playing"
+                    android:textColor="@color/md_theme_on_surface"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/miniChannel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/mini_player_subtitle"
+                    android:textColor="@color/md_theme_outline"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/playOnCarSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/play_on_car"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/miniSeek"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:max="1000"
+            android:progressTint="@color/md_theme_primary"
+            android:thumbTint="@color/md_theme_primary" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/seekBack10"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_skip_back"
+                app:iconTint="@color/md_theme_on_surface" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/miniPlayPause"
+                style="@style/Widget.Material3.Button.IconButton.Filled"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:icon="@drawable/ic_play"
+                app:iconSize="28dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/seekForward10"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_skip_forward"
+                app:iconTint="@color/md_theme_on_surface" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sendToCarButton"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/send_to_car" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/miniTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:text="0:00 / 0:00"
+            android:textColor="@color/md_theme_outline"
+            android:textSize="11sp" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

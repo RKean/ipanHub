@@ -1,3 +1,14 @@
 <resources>
-    <color name="ic_launcher_background">#FF0000</color>
+    <color name="ic_launcher_background">#0F0F0F</color>
+    <color name="md_theme_primary">#FF6B6B</color>
+    <color name="md_theme_on_primary">#FFFFFF</color>
+    <color name="md_theme_surface">#121212</color>
+    <color name="md_theme_on_surface">#E8EAED</color>
+    <color name="md_theme_surface_container">#1E1E1E</color>
+    <color name="md_theme_surface_container_high">#2A2A2A</color>
+    <color name="md_theme_outline">#49454F</color>
+    <color name="banner_ok">#1B3A2F</color>
+    <color name="banner_ok_text">#81C995</color>
+    <color name="banner_warn">#3D2E1A</color>
+    <color name="banner_warn_text">#F9AB51</color>
 </resources>

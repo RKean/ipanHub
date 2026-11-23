@@ -314,8 +314,13 @@ class CarTubePlaybackService : MediaSessionService() {
         const val EXTRA_PHONE_BACKGROUND = "phone_background"
         const val EXTRA_START_POSITION_MS = "start_position_ms"
 
-        fun startCarPlayback(context: android.content.Context, videoId: String, title: String) {
-            startInternal(context, videoId, title, phoneBackground = false, startPositionMs = 0L)
+        fun startCarPlayback(
+            context: android.content.Context,
+            videoId: String,
+            title: String,
+            startPositionMs: Long = 0L
+        ) {
+            startInternal(context, videoId, title, phoneBackground = false, startPositionMs)
         }
 
         fun startPhoneBackgroundPlayback(

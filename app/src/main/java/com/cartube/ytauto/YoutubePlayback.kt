@@ -10,8 +10,18 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 
 object YoutubePlayback {
 
-    fun requestPlayOnCar(context: Context, videoId: String, title: String) {
-        CarTubePlaybackService.startCarPlayback(context.applicationContext, videoId, title)
+    fun requestPlayOnCar(
+        context: Context,
+        videoId: String,
+        title: String,
+        startPositionMs: Long = 0L
+    ) {
+        CarTubePlaybackService.startCarPlayback(
+            context.applicationContext,
+            videoId,
+            title,
+            startPositionMs
+        )
     }
 
     fun requestPhoneBackgroundPlay(
