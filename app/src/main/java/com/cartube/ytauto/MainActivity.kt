@@ -22,6 +22,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.car.app.connection.CarConnection as AaCarConnection
@@ -33,6 +34,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.cartube.ytauto.databinding.ActivityMainBinding
+import com.cartube.ytauto.BuildConfig
 import com.cartube.ytauto.queue.QueueController
 import com.cartube.ytauto.queue.QueueItem
 import com.google.android.material.button.MaterialButton
@@ -105,6 +107,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -326,6 +329,14 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbar.setOnMenuItemClickListener {
             when (it.itemId) {
+                R.id.action_about -> {
+                    Toast.makeText(
+                        this,
+                        "${getString(R.string.about_title)} · ${BuildConfig.VERSION_NAME}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    true
+                }
                 R.id.action_clear_queue -> {
                     QueueController.clear()
                     true

@@ -1,5 +1,6 @@
 <resources>
-    <string name="app_name">CarTube</string>
+    <string name="app_name">ipanHub</string>
+    <string name="about_title">About ipanHub</string>
     <string name="search_hint">Search for a song or video</string>
     <string name="fill_search">Fill search field</string>
     <string name="remove_recent">Remove recent search</string>
@@ -16,8 +17,8 @@
     <string name="added_to_queue">Added to queue</string>
     <string name="clear_queue">Clear queue</string>
     <string name="copy_debug_logs">Copy debug logs</string>
-    <string name="debug_logs_clip">CarTube logs</string>
-    <string name="debug_logs_share">Share CarTube logs</string>
+    <string name="debug_logs_clip">ipanHub logs</string>
+    <string name="debug_logs_share">Share ipanHub logs</string>
     <string name="queue_empty">Queue is empty — search and tap Play now</string>
     <string name="remove_from_queue">Remove</string>
     <string name="link_added">Link added — playing now</string>
@@ -29,18 +30,18 @@
     <string name="refresh">Refresh</string>
     <string name="car_template_error">Controls could not be shown. Playback may continue on the surface.</string>
     <string name="nothing_playing">Nothing playing</string>
-    <string name="mini_player_subtitle">CarTube remote</string>
-    <string name="notification_channel_name">CarTube playback</string>
+    <string name="mini_player_subtitle">ipanHub remote</string>
+    <string name="notification_channel_name">ipanHub playback</string>
     <string name="notification_channel_desc">Shows when video is playing on Android Auto</string>
     <string name="notification_playing_on_car">Playing on your car screen</string>
     <string name="notification_stop">Stop</string>
     <string name="install_banner_untrusted">Video on car needs Play-source install. Tap for steps.</string>
-    <string name="install_banner_trusted">Play-source install OK — open CarTube from AA apps (navigation).</string>
+    <string name="install_banner_trusted">Play-source install OK — open ipanHub from AA apps (navigation).</string>
     <string name="install_guide_title">Video on Android Auto</string>
     <string name="install_guide_copy_adb">Copy adb command</string>
     <string name="install_guide_copied">Copied</string>
     <string name="install_guide_intro">Android Auto blocks template (video surface) apps unless they are installed with Google Play as the installer package. Unknown sources does not fix this.</string>
-    <string name="install_guide_windows_steps">Windows steps: enable USB debugging, connect phone, run platform-tools adb. Uninstall CarTube first. From the folder containing cartube-debug.apk run the command below. Full guide: docs/VIDEO_ON_CAR.md in the repo.</string>
+    <string name="install_guide_windows_steps">Windows steps: enable USB debugging, connect phone, run platform-tools adb. Uninstall ipanHub first. From the folder containing cartube-debug.apk run the command below. Full guide: docs/VIDEO_ON_CAR.md in the repo.</string>
     <string name="install_guide_shizuku_note">No PC? Use Shizuku plus UnknownAuto on the phone (GitHub) to install with Play attribution. Root not required on most devices.</string>
-    <string name="install_guide_after_install">After reinstall: Android Auto developer Unknown sources ON, Customize launcher, pick CarTube under apps/navigation (not Media only).</string>
+    <string name="install_guide_after_install">After reinstall: Android Auto developer Unknown sources ON, Customize launcher, pick ipanHub under apps/navigation (not Media only).</string>
 </resources>

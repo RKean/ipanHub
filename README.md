@@ -1,8 +1,13 @@
-# CarTube
+# ipanHub
 
-Personal-use Android app: **co-driver picks songs on the phone**, **video plays on Android Auto** via NavigationTemplate + ExoPlayer.
+Personal-use Android app (**ipanHub**, package `com.cartube.ytauto`): **co-driver picks songs on the phone**, **video plays on Android Auto** via NavigationTemplate + ExoPlayer.
 
 > **Safety:** Use only while **parked**.
+
+## v1.3.0 — ipanHub rebrand
+
+- User-facing name **ipanHub**; yellow/dark Material 3 theme; hex-hub logo (adaptive + notification + splash)
+- `applicationId` unchanged (`com.cartube.ytauto`) for in-place upgrade / AA allow-list
 
 ## v1.2.2 — Single player + switch fixes
 
@@ -26,7 +31,7 @@ Personal-use Android app: **co-driver picks songs on the phone**, **video plays 
 | **Car** | Fullscreen video; prev / play-pause / next map to the queue |
 | **No AA** | **Audio-only** foreground playback on the phone |
 
-Share a YouTube link into CarTube to queue/play.
+Share a YouTube link into ipanHub to queue/play.
 
 ## Build
 

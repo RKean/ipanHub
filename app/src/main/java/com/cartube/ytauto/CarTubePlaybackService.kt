@@ -552,7 +552,7 @@ class CarTubePlaybackService : MediaSessionService() {
         val toggle = if (playing) ACTION_MEDIA_PAUSE else ACTION_MEDIA_PLAY
         val actionIcon = if (playing) R.drawable.ic_pause else R.drawable.ic_play
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(notificationBody())
             .setContentIntent(contentIntent)
