@@ -1,13 +1,42 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Artifacts folder (CI / local outputs — not source)
+/artifacts/
+
+# Android Studio / Gradle
 *.iml
 .gradle/
 /local.properties
 /.idea/
 .DS_Store
-/build
-/app/build
-/captures
-.externalNativeBuild
-.cxx
-*.apk
-!app/release/*.apk
-!artifacts/*.apk
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystores & signing (never commit)
+*.jks
+*.keystore
+*.p12
+debug.keystore
+release.keystore
+signing.properties
+
+# Secrets & local config
+.env
+.env.*
+secrets.properties
+google-services.json
+
+# OS
+Thumbs.db
+*.swp
+*~
+
+# Log / debug dumps (may contain PII)
+*.log
+cartube-logs.txt

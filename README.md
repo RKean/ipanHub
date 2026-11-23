@@ -1,61 +1,62 @@
 # ipanHub
 
-Personal-use Android app (**ipanHub**, package `com.cartube.ytauto`): **co-driver picks songs on the phone**, **video plays on Android Auto** via NavigationTemplate + ExoPlayer.
+**ipanHub** is a personal Android app for **Android Auto**: a co-driver searches and queues songs on the phone while **video plays on the car head unit** (Android Auto navigation template + video surface). Package id: `com.cartube.ytauto` (kept for in-place upgrades and AA sideload allow-lists).
 
-> **Safety:** Use only while **parked**.
+> **Safety:** Use only while **parked**. You are responsible for complying with local distracted-driving laws.
 
-## v1.3.0 — ipanHub rebrand
+## Disclaimer
 
-- User-facing name **ipanHub**; yellow/dark Material 3 theme; hex-hub logo (adaptive + notification + splash)
-- `applicationId` unchanged (`com.cartube.ytauto`) for in-place upgrade / AA allow-list
+This is a **personal / educational** project. **Not affiliated with, endorsed by, or sponsored by YouTube, Google, or Android Auto.** Stream resolution uses **[NewPipe Extractor](https://github.com/TeamNewPipe/NewPipeExtractor)** (GPL-3.0). You must comply with YouTube’s Terms of Service and applicable copyright law. The authors provide no warranty.
 
-## v1.2.2 — Single player + switch fixes
+## Features
 
-- Process-wide **PlaybackEngine** (one ExoPlayer); service restarts do not create new players
-- **ResolveCoordinator** dedupes in-flight resolves; prefetch is URL-only (no media download)
-- Buffering watchdog disabled for mid-track rebuffers; larger HLS **LoadControl** buffers
-- Idempotent car **surface** attach; action logging with `p@hash` on every line
-- Menu → **Copy debug logs** (last ~300 lines + share)
+| Surface | What you get |
+|---------|----------------|
+| **Phone** | Material 3 dark UI (yellow accents), YouTube search (NewPipe), queue, autocomplete, mini-player remote — **no on-phone fullscreen video** |
+| **Car** | Fullscreen video on the NavigationTemplate surface; action strip: **previous · play/pause · next** |
+| **Playback** | Single process-wide ExoPlayer, queue-driven, HLS-first start, share-link into app |
 
-## v1.2.1 — Search suggestions + playback
+- YouTube-style search suggestions and recent searches  
+- Persistent queue with drag-reorder  
+- Play-source install path for template (video) on many AA builds (see below)
 
-- **YouTube-style autocomplete** under the search bar (NewPipe `SuggestionExtractor`, Google suggest fallback), 250ms debounce, stale request cancel
-- **Recent searches** when the field is empty (tap to search, arrow to fill, X to remove)
-- Faster track switches, buffering watchdog, HLS-first resolve, loading state on notification/mini-player
+## Screenshots
 
-## v1.2.0 — Remote + queue
+> Replace these placeholders with your own captures after install.
 
-| Surface | Behavior |
-|---------|----------|
-| **Phone** | Native Material 3 **search** (NewPipe), **queue**, mini-player remote — **no on-screen video** |
-| **Car** | Fullscreen video; prev / play-pause / next map to the queue |
-| **No AA** | **Audio-only** foreground playback on the phone |
-
-Share a YouTube link into ipanHub to queue/play.
+| Phone (search / queue) | Phone (mini-player) | Car (DHU / head unit) |
+|------------------------|---------------------|----------------------|
+| `docs/screenshots/phone-search.png` *(add)* | `docs/screenshots/phone-mini-player.png` *(add)* | `docs/screenshots/car-video.png` *(add)* |
 
 ## Build
+
+Requirements: **JDK 17**, Android SDK **API 34**.
 
 ```bash
 ./gradlew assembleDebug test
 ```
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`
+Debug APK (not committed to git):
 
-## Play-source install (video on car screen)
+`app/build/outputs/apk/debug/app-debug.apk`
 
-See **[docs/VIDEO_ON_CAR.md](docs/VIDEO_ON_CAR.md)**:
+## Install (debug, video on car screen)
 
-```bat
-adb install -r -g -i com.android.vending cartube-debug.apk
+Many Android Auto builds only allow **template / video surface** apps when installed with **Google Play as the installer package**. See **[docs/VIDEO_ON_CAR.md](docs/VIDEO_ON_CAR.md)** for full steps.
+
+```bash
+adb install -r -g -i com.android.vending app-debug.apk
 ```
 
-## Architecture
+On the phone: **Android Auto → Developer settings → Unknown sources** (or “Add extra app”) enabled, then add **ipanHub** under apps/navigation (not Media-only).
 
-- **QueueController** — persisted queue + play head (disk)
-- **CarTubePlaybackService** — single ExoPlayer + MediaSession; auto-advance; prefetch next stream; **StreamCache**
-- **PlaybackClient** — phone UI sync
-- Hidden **CookieWebView** for YouTube cookies only
+## Architecture (short)
 
-## Verified in CI
+- **QueueController** — persisted queue + play head  
+- **PlaybackEngine** + **CarTubePlaybackService** — one ExoPlayer, MediaSession, NewPipe resolve + cache  
+- **CarTubeCarAppService** — car UI (video surface + controls)  
+- Hidden **CookieWebView** for optional YouTube cookies (no credentials in repo)
 
-`assembleDebug` and unit tests (including `QueueControllerTest`) pass.
+## License
+
+**GNU General Public License v3.0** — see [LICENSE](LICENSE). GPLv3 applies because this project depends on NewPipe Extractor (GPL-3.0).
