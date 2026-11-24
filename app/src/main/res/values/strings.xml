@@ -28,6 +28,8 @@
     <string name="car_surface_idle_subtitle">Search on your phone, then play here</string>
     <string name="car_map_help">Help</string>
     <string name="car_take_map">Take map</string>
+    <string name="playback_error_title">Playback failed</string>
+    <string name="playback_error_detail">Could not play “%1$s” (%2$s). Tap Retry.</string>
     <string name="car_search_on_phone">Search on phone</string>
     <string name="car_queue_count">Queue: %1$d</string>
     <string name="back">Back</string>

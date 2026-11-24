@@ -4,7 +4,7 @@
 
 The head unit showed **“Search and tap a result to play on the car”** — that row came from the **legacy MediaBrowser** path, not the Car App **NavigationTemplate** surface. With **Waze** as active nav, Coolwalk kept Waze on the **map card** and ipanHub on a **side list card** with **no `ACCESS_SURFACE`**.
 
-v1.3.4 changes entry to **navigation only** (`automotive_app_desc`: template + navigation, no media browse UI) and always opens **`VideoPlayerScreen`** = `NavigationTemplate` + `SurfaceCallback`.
+v1.3.4+ changes entry to **navigation only**. **v1.3.5** never paints on the car `Surface` with Canvas (ExoPlayer needs exclusive surface access). (`automotive_app_desc`: template + navigation, no media browse UI) and always opens **`VideoPlayerScreen`** = `NavigationTemplate` + `SurfaceCallback`.
 
 ## Claiming the map card
 

@@ -281,7 +281,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupMiniPlayer() {
         miniPlayPause.setOnClickListener {
-            if (PlaybackClient.isPlaying()) PlaybackClient.pause() else PlaybackClient.play()
+            if (PlaybackController.playbackErrorMessage != null) {
+                PlaybackController.clearPlaybackError()
+                CarTubePlaybackService.requestPlayCurrent(this, forceRestart = true)
+            } else if (PlaybackClient.isPlaying()) {
+                PlaybackClient.pause()
+            } else {
+                PlaybackClient.play()
+            }
+            refreshMiniPlayerUi()
         }
         findViewById<MaterialButton>(R.id.seekBack10).setOnClickListener {
             PlaybackClient.seekBy(-10_000L)
@@ -428,7 +436,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.miniPlayer).isVisible = active || QueueController.allItems().isNotEmpty()
         val title = PlaybackController.title
         val videoId = PlaybackController.videoId
-        if (PlaybackController.isLoading) {
+        val error = PlaybackController.playbackErrorMessage
+        if (error != null) {
+            miniTitle.text = getString(R.string.playback_error_title)
+            miniChannel.text = error
+            miniPlayPause.setIconResource(R.drawable.ic_car_retry)
+        } else if (PlaybackController.isLoading) {
             miniTitle.text = getString(R.string.loading_title, PlaybackController.loadingTitle)
             miniChannel.text = getString(R.string.loading_subtitle)
         } else if (active && title.isNotBlank()) {

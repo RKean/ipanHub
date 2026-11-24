@@ -31,6 +31,10 @@ object PlaybackController {
     var loadingTitle: String = ""
         private set
 
+    @Volatile
+    var playbackErrorMessage: String? = null
+        private set
+
     private val surfaceLock = Any()
     private var carSurface: Surface? = null
     private var carSurfaceWidth: Int = 0
@@ -71,12 +75,26 @@ object PlaybackController {
     fun setLoading(title: String) {
         isLoading = true
         loadingTitle = title
+        playbackErrorMessage = null
         notifyListeners()
     }
 
     fun clearLoading() {
         isLoading = false
         loadingTitle = ""
+        notifyListeners()
+    }
+
+    fun setPlaybackError(message: String) {
+        isLoading = false
+        loadingTitle = ""
+        playbackErrorMessage = message
+        notifyListeners()
+    }
+
+    fun clearPlaybackError() {
+        if (playbackErrorMessage == null) return
+        playbackErrorMessage = null
         notifyListeners()
     }
 
@@ -222,6 +240,7 @@ object PlaybackController {
             videoId = ""
             isLoading = false
             loadingTitle = ""
+            playbackErrorMessage = null
             playbackMode = PlaybackMode.CAR
             surfaceReadySignal = null
         }

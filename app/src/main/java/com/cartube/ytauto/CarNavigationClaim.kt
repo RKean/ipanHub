@@ -14,16 +14,11 @@ import androidx.car.app.navigation.model.Trip
 import java.lang.ref.WeakReference
 import java.time.ZonedDateTime
 
-/**
- * Claims Android Auto navigation focus so Coolwalk grants the map [android.view.Surface].
- *
- * The car **host** picks a single active navigation app. Waze with an active route can take
- * focus back; the host then calls [onStopNavigation] and we must comply (see NF-5).
- */
 object CarNavigationClaim {
 
   private var contextRef = WeakReference<CarContext>(null)
   @Volatile private var sessionActive = false
+  @Volatile private var uiOpenClaimed = false
   @Volatile var hostRevokedWhilePlaying: Boolean = false
     private set
 
@@ -33,16 +28,14 @@ object CarNavigationClaim {
     override fun run() {
       if (!sessionActive) return
       val ctx = contextRef.get() ?: return
-      val nm = ctx.getCarService(NavigationManager::class.java)
-      putActiveTrip(nm, lastTitle, pulse = true)
-      mainHandler.postDelayed(this, 4_000L)
+      putActiveTrip(ctx.getCarService(NavigationManager::class.java), lastTitle, pulse = true)
+      mainHandler.postDelayed(this, 8_000L)
     }
   }
 
   fun attachCarContext(carContext: CarContext) {
     contextRef = WeakReference(carContext)
-    val nm = carContext.getCarService(NavigationManager::class.java)
-    nm.setNavigationManagerCallback(
+    carContext.getCarService(NavigationManager::class.java).setNavigationManagerCallback(
       object : NavigationManagerCallback {
         override fun onStopNavigation() = onHostStopNavigation()
       }
@@ -55,10 +48,13 @@ object CarNavigationClaim {
     endNavigationSession("detach")
     contextRef.get()?.getCarService(NavigationManager::class.java)?.clearNavigationManagerCallback()
     contextRef = WeakReference(null)
+    uiOpenClaimed = false
   }
 
-  /** User opened the car nav UI or resumed ipanHub — try to own the map slot. */
+  /** First open of car UI only — not on every resume. */
   fun claimWhileUiVisible(title: String, reason: String) {
+    if (reason == "ui-open-once" && uiOpenClaimed) return
+    if (reason == "ui-open-once") uiOpenClaimed = true
     lastTitle = title
     claimNavigationSlot(title, reason)
   }
@@ -73,11 +69,17 @@ object CarNavigationClaim {
     endNavigationSession("playback-ended")
   }
 
-  /** User tapped "Take map" after another nav app stole the card. */
   fun forceReclaim(title: String) {
     hostRevokedWhilePlaying = false
     sessionActive = false
     claimNavigationSlot(title, "user-reclaim")
+  }
+
+  fun refreshTripTitle(title: String) {
+    if (!sessionActive) return
+    lastTitle = title
+    val ctx = contextRef.get() ?: return
+    putActiveTrip(ctx.getCarService(NavigationManager::class.java), title, pulse = false)
   }
 
   private fun claimNavigationSlot(title: String, reason: String) {
@@ -92,12 +94,13 @@ object CarNavigationClaim {
       hostRevokedWhilePlaying = false
       CarTubeLog.i("[nav] navigationStarted ($reason)")
       mainHandler.removeCallbacks(tripPulse)
-      mainHandler.postDelayed(tripPulse, 4_000L)
+      mainHandler.postDelayed(tripPulse, 8_000L)
     }
     putActiveTrip(nm, title, pulse = false)
   }
 
   private fun putActiveTrip(nm: NavigationManager, title: String, pulse: Boolean) {
+    if (!sessionActive) return
     val label = title.ifBlank { "ipanHub" }
     val dest = Destination.Builder().setName(label).setAddress("Now playing").build()
     val distance = Distance.create(0.0, Distance.UNIT_METERS)
@@ -131,7 +134,8 @@ object CarNavigationClaim {
   }
 
   private fun onHostStopNavigation() {
-    CarTubeLog.w("[nav] host onStopNavigation — another nav app (e.g. Waze) took focus")
+    if (!sessionActive) return
+    CarTubeLog.w("[nav] host onStopNavigation — another nav app may be active")
     sessionActive = false
     mainHandler.removeCallbacks(tripPulse)
     hostRevokedWhilePlaying = PlaybackController.hasActivePlayback

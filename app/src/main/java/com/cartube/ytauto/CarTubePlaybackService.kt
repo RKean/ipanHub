@@ -53,6 +53,7 @@ class CarTubePlaybackService : MediaSessionService() {
     private var bufferingSinceMs = 0L
     private var lastPlayheadMs = 0L
     private var trackSwitchEpoch = 0
+    private var playbackRecoveryAttempts = 0
 
     private val sessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -219,6 +220,8 @@ class CarTubePlaybackService : MediaSessionService() {
                         }
                         Player.STATE_READY -> {
                             cancelBufferingWatchdog()
+                            playbackRecoveryAttempts = 0
+                            PlaybackController.clearPlaybackError()
                             PlaybackController.clearLoading()
                             schedulePrefetchAfterReady()
                         }
@@ -323,11 +326,19 @@ class CarTubePlaybackService : MediaSessionService() {
             stopSelf()
             return
         }
+        playbackRecoveryAttempts++
+        if (playbackRecoveryAttempts > MAX_PLAYBACK_RECOVERY_ATTEMPTS) {
+            CarTubeLog.e("[service] playback recovery cap reached ($trigger)")
+            showPlaybackError(item, trigger)
+            return
+        }
         val kind = currentStreamKind
         StreamCache.invalidate(item.videoId)
         val skip = buildSet { kind?.let { add(it) } }
         if (skip.size < YoutubeStreamResolver.StreamKind.entries.size) {
-            CarTubeLog.i("[service] fallback resolve skip=$skip trigger=$trigger")
+            CarTubeLog.i(
+                "[service] fallback resolve skip=$skip trigger=$trigger attempt=$playbackRecoveryAttempts"
+            )
             cancelBufferingWatchdog()
             playJob?.cancel()
             playJob = serviceScope.launch {
@@ -347,15 +358,49 @@ class CarTubePlaybackService : MediaSessionService() {
                             val mode = playbackMode()
                             playResolvedStream(resolved.stream, item, mode, 0L, "fallback_$trigger")
                         }
-                        else -> skipAfterError("Skipped — couldn't load video")
+                        else -> {
+                            if (playbackRecoveryAttempts >= MAX_PLAYBACK_RECOVERY_ATTEMPTS) {
+                                showPlaybackError(item, trigger)
+                            } else {
+                                skipAfterError("Skipped — couldn't load video")
+                            }
+                        }
                     }
                 } finally {
                     resolvingVideoId = null
                 }
             }
         } else {
-            skipAfterError("Skipped — playback stalled")
+            if (playbackRecoveryAttempts >= MAX_PLAYBACK_RECOVERY_ATTEMPTS) {
+                showPlaybackError(item, trigger)
+            } else {
+                skipAfterError("Skipped — playback stalled")
+            }
         }
+    }
+
+    private fun showPlaybackError(item: QueueItem, trigger: String) {
+        cancelBufferingWatchdog()
+        playJob?.cancel()
+        playbackRecoveryAttempts = 0
+        PlaybackEngine.player()?.let { player ->
+            player.stop()
+            player.clearMediaItems()
+        }
+        val msg = getString(R.string.playback_error_detail, item.title.ifBlank { item.videoId }, trigger)
+        PlaybackController.setPlaybackError(msg)
+        CarTubeLog.e("[service] playback error shown: $msg")
+        if (playbackMode() == PlaybackController.PlaybackMode.CAR) {
+            CarNavigationClaim.onPlaybackInactive()
+        }
+        updateNotification()
+        broadcastPlaybackError(msg)
+    }
+
+    private fun broadcastPlaybackError(message: String) {
+        sendBroadcast(
+            Intent(ACTION_PLAYBACK_ERROR).putExtra(EXTRA_ERROR_MESSAGE, message).setPackage(packageName)
+        )
     }
 
     private fun onTrackEnded() {
@@ -384,6 +429,8 @@ class CarTubePlaybackService : MediaSessionService() {
     private fun startQueueItemJob(item: QueueItem, seekMs: Long, force: Boolean, reason: String) {
         prefetchJob?.cancel()
         playJob?.cancel()
+        playbackRecoveryAttempts = 0
+        PlaybackController.clearPlaybackError()
         val epoch = ++trackSwitchEpoch
         playJob = serviceScope.launch {
             resolvingVideoId = item.videoId
@@ -529,7 +576,9 @@ class CarTubePlaybackService : MediaSessionService() {
         prefetchJob?.cancel()
         cancelBufferingWatchdog()
         resolvingVideoId = null
+        playbackRecoveryAttempts = 0
         preparePlayerForSwitch(reason)
+        CarNavigationClaim.onPlaybackInactive()
         PlaybackController.detachUiOnly()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     }
@@ -545,6 +594,7 @@ class CarTubePlaybackService : MediaSessionService() {
 
     private fun updateNotification() {
         val title = when {
+            PlaybackController.playbackErrorMessage != null -> getString(R.string.playback_error_title)
             PlaybackController.isLoading -> getString(R.string.loading_title, PlaybackController.loadingTitle)
             else -> PlaybackController.title.ifBlank { getString(R.string.app_name) }
         }
@@ -554,6 +604,7 @@ class CarTubePlaybackService : MediaSessionService() {
     }
 
     private fun notificationBody(): String {
+        PlaybackController.playbackErrorMessage?.let { return it }
         val buffer = when {
             PlaybackController.isLoading -> ""
             isBuffering -> " · Buffering…"
@@ -644,6 +695,7 @@ class CarTubePlaybackService : MediaSessionService() {
         const val SESSION_ID = "CarTubePlayback"
         const val CHANNEL_ID = "cartube_playback"
         const val NOTIFICATION_ID = 42
+        private const val MAX_PLAYBACK_RECOVERY_ATTEMPTS = 3
 
         @Volatile
         private var listenersAttached = false

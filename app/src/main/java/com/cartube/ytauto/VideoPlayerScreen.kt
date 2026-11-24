@@ -9,17 +9,21 @@ import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
+import androidx.car.app.model.CarText
+import androidx.car.app.model.Distance
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.NavigationTemplate
+import androidx.car.app.navigation.model.TravelEstimate
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.cartube.ytauto.queue.QueueController
+import java.time.ZonedDateTime
 
 /**
- * Sole car-app entry screen: always [NavigationTemplate] + [SurfaceCallback] so Coolwalk
- * treats ipanHub as a navigation app (map surface), not a legacy media browse list.
+ * Sole car-app entry: [NavigationTemplate] + [SurfaceCallback]. Map strip = **icon-only** actions.
  */
 class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), SurfaceCallback {
 
@@ -32,16 +36,17 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
   private var lastContainer: SurfaceContainer? = null
   private var lastVisibleArea: Rect? = null
   private var lastStableArea: Rect? = null
+  private var uiNavClaimed = false
   private val playbackListener = {
-    syncNavigationSession()
-    repaintIdleIfNeeded()
+    if (CarNavigationClaim.isNavigationSessionActive) {
+      CarNavigationClaim.refreshTripTitle(PlaybackController.title)
+    }
     invalidate()
   }
   private val tick = object : Runnable {
     override fun run() {
-      repaintIdleIfNeeded()
       invalidate()
-      mainHandler.postDelayed(this, 2_000L)
+      mainHandler.postDelayed(this, 5_000L)
     }
   }
 
@@ -52,22 +57,27 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
         CarNavigationClaim.attachCarContext(carContext)
         PlaybackController.addPlaybackListener(playbackListener)
         mainHandler.post(tick)
-        syncNavigationSession()
+        claimNavigationOnceForOpen()
+        if (PlaybackController.hasActivePlayback) {
+          CarNavigationClaim.onPlaybackActive(PlaybackController.title)
+        }
       }
 
       override fun onResume(owner: LifecycleOwner) {
         CarTubeLog.i("[car] NavigationPlayer RESUMED — reattach surface")
-        syncNavigationSession()
         PlaybackController.reattachCarSurfaceIfNeeded()
+        if (CarNavigationClaim.isNavigationSessionActive) {
+          CarNavigationClaim.refreshTripTitle(PlaybackController.title)
+        }
         PlaybackEngine.player()?.let { p ->
           if (PlaybackController.hasActivePlayback &&
-              !p.isPlaying &&
-              p.playbackState == androidx.media3.common.Player.STATE_READY
+            !p.isPlaying &&
+            p.playbackState == androidx.media3.common.Player.STATE_READY &&
+            PlaybackController.playbackErrorMessage == null
           ) {
             p.play()
           }
         }
-        repaintIdleIfNeeded()
         invalidate()
       }
 
@@ -84,16 +94,11 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     })
   }
 
-  private fun syncNavigationSession() {
-    val title = PlaybackController.title
-    if (PlaybackController.hasActivePlayback) {
-      CarNavigationClaim.onPlaybackActive(title)
-    } else {
-      CarNavigationClaim.onPlaybackInactive()
-      CarNavigationClaim.claimWhileUiVisible(title, "ui-open")
-    }
-    if (CarNavigationClaim.hostRevokedWhilePlaying && !PlaybackController.hasCarSurface) {
-      CarTubeLog.w("[nav] map surface missing after host revoke — show Take map")
+  private fun claimNavigationOnceForOpen() {
+    if (uiNavClaimed) return
+    uiNavClaimed = true
+    if (!PlaybackController.hasActivePlayback && !CarNavigationClaim.isNavigationSessionActive) {
+      CarNavigationClaim.claimWhileUiVisible("", "ui-open-once")
     }
   }
 
@@ -104,8 +109,13 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
 
   override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {
     logSurfaceEvent("onSurfaceDestroyed", surfaceContainer, null, null)
-    if (attachedSurface != null && surfaceContainer.surface !== attachedSurface) {
-      CarTubeLog.d("[car] destroy ignored — different surface instance")
+    val destroyed = surfaceContainer.surface
+    if (destroyed != null && attachedSurface != null && destroyed !== attachedSurface) {
+      CarTubeLog.d(
+        "[car] destroy ignored — different surface instance " +
+          "destroy=${CarTubeLog.surfaceIdentity(destroyed)} " +
+          "ours=${CarTubeLog.surfaceIdentity(attachedSurface)}"
+      )
       return
     }
     lastContainer = null
@@ -134,7 +144,10 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
 
   private fun bindSurface(surfaceContainer: SurfaceContainer, reason: String) {
     val surface = surfaceContainer.surface ?: run {
-      CarTubeLog.w("[car] $reason — null Surface")
+      CarTubeLog.w("[car] $reason — null Surface; release player binding")
+      PlaybackController.releaseCarSurface()
+      surfaceAttached = false
+      attachedSurface = null
       return
     }
     val w = surfaceContainer.width
@@ -144,7 +157,6 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     val surfaceChanged = attachedSurface !== surface
     if (surfaceAttached && !surfaceChanged && !sizeChanged) {
       CarTubeLog.d("[car] $reason — no change ${w}x${h}")
-      repaintIdleIfNeeded()
       return
     }
     logSurfaceEvent(reason, surfaceContainer, lastVisibleArea, lastStableArea)
@@ -154,37 +166,17 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     lastDpi = dpi
     surfaceAttached = true
     PlaybackController.attachCarSurface(surface, w, h, dpi)
-    if (PlaybackController.hasActivePlayback && PlaybackController.player?.isPlaying == true) {
+    if (PlaybackController.hasActivePlayback && PlaybackController.playbackErrorMessage == null) {
       PlaybackController.reattachCarSurfaceIfNeeded()
-    } else {
-      repaintIdleIfNeeded()
     }
     invalidate()
   }
 
-  private fun repaintIdleIfNeeded() {
-    val surface = attachedSurface ?: return
-    if (!surface.isValid) return
-    if (PlaybackController.hasActivePlayback && PlaybackController.player?.isPlaying == true) return
-    val subtitle = when {
-      PlaybackController.hasActivePlayback -> PlaybackController.title
-      else -> carContext.getString(R.string.car_pick_on_phone)
-    }
-    CarSurfaceIdleRenderer.paintIdle(
-      carContext,
-      surface,
-      lastWidth,
-      lastHeight,
-      carContext.getString(R.string.app_name),
-      subtitle,
-    )
-  }
-
   private fun logSurfaceEvent(
-      event: String,
-      container: SurfaceContainer,
-      visible: Rect?,
-      stable: Rect?
+    event: String,
+    container: SurfaceContainer,
+    visible: Rect?,
+    stable: Rect?
   ) {
     val s = container.surface
     CarTubeLog.i(
@@ -196,45 +188,54 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
   }
 
   override fun buildTemplate(): Template {
-    return NavigationTemplate.Builder()
+    val builder = NavigationTemplate.Builder()
       .setActionStrip(buildMainActionStrip())
-      .setMapActionStrip(buildMapActionStrip())
-      .build()
+      .setDestinationTravelEstimate(buildStatusEstimate())
+    buildMapActionStrip()?.let { builder.setMapActionStrip(it) }
+    return builder.build()
   }
 
-  private fun buildMapActionStrip(): ActionStrip {
-    val takeMap = Action.Builder()
-      .setTitle(carContext.getString(R.string.car_take_map))
-      .setOnClickListener {
-        CarNavigationClaim.forceReclaim(PlaybackController.title)
-        PlaybackController.reattachCarSurfaceIfNeeded()
-        invalidate()
-      }
-      .build()
+  /** Map action strip: icon-only (no custom titles). */
+  private fun buildMapActionStrip(): ActionStrip? {
     return ActionStrip.Builder()
-      .addAction(takeMap)
       .addAction(
-        Action.Builder()
-          .setTitle(carContext.getString(R.string.car_map_help))
-          .setOnClickListener { screenManager.push(CarSplitHelpScreen(carContext)) }
-          .build()
+        carIconAction(R.drawable.ic_car_take_map) {
+          CarNavigationClaim.forceReclaim(PlaybackController.title)
+          PlaybackController.reattachCarSurfaceIfNeeded()
+          invalidate()
+        }
       )
       .addAction(
-        Action.Builder()
-          .setTitle(queueStripLabel())
-          .setEnabled(PlaybackController.hasActivePlayback)
-          .setOnClickListener { invalidate() }
-          .build()
+        carIconAction(R.drawable.ic_car_help) {
+          screenManager.push(CarSplitHelpScreen(carContext))
+        }
       )
       .build()
   }
 
-  private fun queueStripLabel(): String {
-    val n = QueueController.allItems().size
-    return if (n > 0) {
-      carContext.getString(R.string.car_queue_count, n)
+  private fun buildStatusEstimate(): TravelEstimate {
+    val status = statusLine()
+    val distance = Distance.create(0.0, Distance.UNIT_METERS)
+    return TravelEstimate.Builder(distance, ZonedDateTime.now())
+      .setTripText(CarText.create(status))
+      .setRemainingTimeSeconds(0)
+      .setRemainingTimeColor(CarColor.DEFAULT)
+      .build()
+  }
+
+  private fun statusLine(): String {
+    PlaybackController.playbackErrorMessage?.let { return it }
+    if (PlaybackController.isLoading) {
+      return carContext.getString(R.string.loading_subtitle)
+    }
+    if (PlaybackController.hasActivePlayback && PlaybackController.title.isNotBlank()) {
+      return PlaybackController.title
+    }
+    val q = QueueController.allItems().size
+    return if (q > 0) {
+      carContext.getString(R.string.car_queue_count, q)
     } else {
-      carContext.getString(R.string.car_search_on_phone)
+      carContext.getString(R.string.car_pick_on_phone)
     }
   }
 
@@ -243,20 +244,39 @@ class VideoPlayerScreen(carContext: CarContext) : SafeCarScreen(carContext), Sur
     val playing = player?.isPlaying == true
     val canPrev = QueueController.hasPrevious()
     val canNext = QueueController.hasNext()
-    return ActionStrip.Builder()
-      .addAction(carSkipAction(R.drawable.ic_car_skip_previous, canPrev) {
+    val error = PlaybackController.playbackErrorMessage != null
+    val builder = ActionStrip.Builder()
+      .addAction(carSkipAction(R.drawable.ic_car_skip_previous, canPrev && !error) {
         CarTubePlaybackService.requestSkipPrevious(carContext)
       })
-      .addAction(
-        carSkipAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play, enabled = player != null) {
-          player?.let { if (it.isPlaying) it.pause() else it.play() }
-          repaintIdleIfNeeded()
+    if (error) {
+      builder.addAction(
+        carSkipAction(R.drawable.ic_car_retry, enabled = true) {
+          PlaybackController.clearPlaybackError()
+          CarTubePlaybackService.requestPlayCurrent(carContext, forceRestart = true)
           invalidate()
         }
       )
-      .addAction(carSkipAction(R.drawable.ic_car_skip_next, canNext) {
+    } else {
+      builder.addAction(
+        carSkipAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play, enabled = player != null) {
+          player?.let { if (it.isPlaying) it.pause() else it.play() }
+          invalidate()
+        }
+      )
+    }
+    return builder
+      .addAction(carSkipAction(R.drawable.ic_car_skip_next, canNext && !error) {
         CarTubePlaybackService.requestSkipNext(carContext)
       })
+      .build()
+  }
+
+  private fun carIconAction(iconRes: Int, onClick: () -> Unit): Action {
+    val icon = IconCompat.createWithResource(carContext, iconRes)
+    return Action.Builder()
+      .setIcon(CarIcon.Builder(icon).build())
+      .setOnClickListener { onClick() }
       .build()
   }
 
