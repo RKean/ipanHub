@@ -2,16 +2,13 @@ package com.cartube.ytauto
 
 import android.os.Bundle
 import android.support.v4.media.MediaBrowserCompat
-import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.media.MediaBrowserServiceCompat
 
 /**
- * Legacy Android Auto media registration so sideloaded builds pass host validation.
- * Car App Library apps declare <uses name="template"/>; on many Android Auto versions
- * "Unknown sources" does not whitelist TEMPLATE, but it does whitelist MEDIA.
- * Video UI still runs through [CarTubeCarAppService] (NavigationTemplate + surface).
+ * In-car **playback controls** only (MediaSession). Not listed in AA launcher — video UI is
+ * [CarTubeCarAppService] via `automotive_app_desc` template + navigation (no `media` use).
  */
 class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
 
@@ -53,6 +50,10 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
         clientUid: Int,
         rootHints: Bundle?
     ): BrowserRoot? {
+        if (isAndroidAutoHost(clientPackageName)) {
+            CarTubeLog.i("[media] onGetRoot deny AA browse client=$clientPackageName")
+            return null
+        }
         return BrowserRoot(ROOT_ID, null)
     }
 
@@ -60,21 +61,12 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
         parentId: String,
         result: Result<MutableList<MediaBrowserCompat.MediaItem>>
     ) {
-        if (parentId != ROOT_ID) {
-            result.sendResult(mutableListOf())
-            return
-        }
-        // Sideloaded AA builds often require a non-empty media root to list the app at all.
-        val description = MediaDescriptionCompat.Builder()
-            .setMediaId(ROOT_ID)
-            .setTitle(getString(R.string.app_name))
-            .setSubtitle(getString(R.string.aa_media_root_hint))
-            .build()
-        val rootItem = MediaBrowserCompat.MediaItem(
-            description,
-            MediaBrowserCompat.MediaItem.FLAG_BROWSABLE
-        )
-        result.sendResult(mutableListOf(rootItem))
+        result.sendResult(mutableListOf())
+    }
+
+    private fun isAndroidAutoHost(clientPackageName: String): Boolean {
+        return clientPackageName == GEARHEAD_PACKAGE ||
+            clientPackageName.startsWith("com.google.android.projection.")
     }
 
     private fun syncPlaybackState() {
@@ -152,5 +144,6 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
     companion object {
         private const val TAG = "CarTubeMedia"
         const val ROOT_ID = "cartube_root"
+        const val GEARHEAD_PACKAGE = "com.google.android.projection.gearhead"
     }
 }

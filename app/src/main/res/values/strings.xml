@@ -7,7 +7,6 @@
     <string name="loading_title">Loading %1$s</string>
     <string name="loading_subtitle">Starting playback…</string>
     <string name="search_prompt">Search and tap a result to play on the car</string>
-    <string name="aa_media_root_hint">For video: open ipanHub under Navigation in the car launcher (enable Unknown sources on the phone if sideloaded).</string>
     <string name="dismiss_suggestions">Close</string>
     <string name="show_queue_panel">Queue (%1$d)</string>
     <string name="dismiss_queue_panel">Hide queue panel</string>
@@ -64,5 +63,5 @@
     <string name="install_guide_intro">Android Auto blocks template (video surface) apps unless they are installed with Google Play as the installer package. Unknown sources does not fix this.</string>
     <string name="install_guide_windows_steps">Windows steps: enable USB debugging, connect phone, run platform-tools adb. Uninstall ipanHub first. From the folder containing cartube-debug.apk run the command below. Full guide: docs/VIDEO_ON_CAR.md in the repo.</string>
     <string name="install_guide_shizuku_note">No PC? Use Shizuku plus UnknownAuto on the phone (GitHub) to install with Play attribution. Root not required on most devices.</string>
-    <string name="install_guide_after_install">After reinstall: Android Auto developer Unknown sources ON, Customize launcher, pick ipanHub under apps/navigation (not Media only).</string>
+    <string name="install_guide_after_install">After reinstall: Android Auto → Developer settings → Unknown sources ON, then Customize launcher and enable ipanHub. The launcher icon should open the navigation/video app (map surface), not a media browse list.</string>
 </resources>

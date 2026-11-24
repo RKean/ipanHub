@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <automotiveApp>
-    <!-- template + navigation: video map surface; media: sideloaded launcher discovery (v1.3.4 drop broke AA menu on many hosts) -->
+    <!-- Video Car App: template + navigation only. Do NOT declare media here or AA merges to the browse UI. -->
     <uses name="template" />
     <uses name="navigation" />
-    <uses name="media" />
 </automotiveApp>

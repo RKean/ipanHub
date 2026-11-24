@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.7 (2026-11-24)
+
+- AA launcher: drop `media` from `automotive_app_desc`; deny Gearhead MediaBrowser root so the icon opens **NavigationTemplate** / surface (not browse UI).
+- Removed misleading media-root subtitle.
+
 ## 1.3.6 (2026-11-24)
 
 - Restore **automotive_app_desc `media`** + MediaBrowser root (AA launcher for sideload).
