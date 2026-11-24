@@ -23,6 +23,11 @@ class CarTubeSession : Session() {
     }
 
     override fun onCreateScreen(intent: Intent): Screen {
+        CarTubeLog.i("[car] onCreateScreen action=${intent.action}")
         return VideoPlayerScreen(carContext)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        CarTubeLog.i("[car] onNewIntent action=${intent.action}")
     }
 }

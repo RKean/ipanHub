@@ -1,18 +1,22 @@
 package com.cartube.ytauto
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.media.MediaBrowserServiceCompat
 
 /**
- * In-car **playback controls** only (MediaSession). Not listed in AA launcher — video UI is
- * [CarTubeCarAppService] via `automotive_app_desc` template + navigation (no `media` use).
+ * Media entry for sideloaded AA launcher visibility. Playback controls + hand off to
+ * [CarTubeCarAppService] for [NavigationTemplate] video.
  */
 class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
 
     private lateinit var mediaSession: MediaSessionCompat
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -25,7 +29,8 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
                             PlaybackStateCompat.ACTION_PAUSE or
                             PlaybackStateCompat.ACTION_SEEK_TO or
                             PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                            PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID
                     )
                     .setState(PlaybackStateCompat.STATE_NONE, 0, 0f)
                     .build()
@@ -40,6 +45,7 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
     private val playbackSyncListener: () -> Unit = { syncPlaybackState() }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
         PlaybackController.removePlaybackListener(playbackSyncListener)
         mediaSession.release()
         super.onDestroy()
@@ -50,9 +56,11 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
         clientUid: Int,
         rootHints: Bundle?
     ): BrowserRoot? {
-        if (isAndroidAutoHost(clientPackageName)) {
-            CarTubeLog.i("[media] onGetRoot deny AA browse client=$clientPackageName")
-            return null
+        if (isAndroidAutoHost(clientPackageName) && !CarConnection.isCarSessionActive) {
+            CarTubeLog.i("[media] AA browse connect client=$clientPackageName -> hand off to CarApp")
+            mainHandler.postDelayed({
+                CarUiLauncher.launchCarVideoUi(applicationContext, "aa-browse-root")
+            }, 600L)
         }
         return BrowserRoot(ROOT_ID, null)
     }
@@ -61,7 +69,20 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
         parentId: String,
         result: Result<MutableList<MediaBrowserCompat.MediaItem>>
     ) {
-        result.sendResult(mutableListOf())
+        if (parentId != ROOT_ID) {
+            result.sendResult(mutableListOf())
+            return
+        }
+        val description = MediaDescriptionCompat.Builder()
+            .setMediaId(CarUiLauncher.MEDIA_ID_OPEN_CAR)
+            .setTitle(getString(R.string.app_name))
+            .setSubtitle(getString(R.string.aa_media_launch))
+            .build()
+        val openCar = MediaBrowserCompat.MediaItem(
+            description,
+            MediaBrowserCompat.MediaItem.FLAG_PLAYABLE or MediaBrowserCompat.MediaItem.FLAG_BROWSABLE
+        )
+        result.sendResult(mutableListOf(openCar))
     }
 
     private fun isAndroidAutoHost(clientPackageName: String): Boolean {
@@ -85,7 +106,8 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
                         PlaybackStateCompat.ACTION_PAUSE or
                         PlaybackStateCompat.ACTION_SEEK_TO or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID
                 )
                 .setState(state, player?.currentPosition ?: 0L, 1f)
                 .build()
@@ -112,9 +134,28 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
         }
     }
 
+    private fun requestCarVideoUi(reason: String) {
+        CarUiLauncher.launchCarVideoUi(applicationContext, reason)
+    }
+
     private inner class SessionCallback : MediaSessionCompat.Callback() {
         override fun onPlay() {
+            requestCarVideoUi("media-session-play")
             PlaybackController.player?.play()
+            syncPlaybackState()
+        }
+
+        override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
+            requestCarVideoUi("media-play-id-$mediaId")
+            if (mediaId == CarUiLauncher.MEDIA_ID_OPEN_CAR) {
+                if (PlaybackController.hasActivePlayback) {
+                    PlaybackController.player?.play()
+                } else {
+                    CarTubePlaybackService.requestPlayCurrent(this@CarTubeMediaBrowserService)
+                }
+            } else {
+                PlaybackController.player?.play()
+            }
             syncPlaybackState()
         }
 

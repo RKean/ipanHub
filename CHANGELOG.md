@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.8 (2026-11-24)
+
+- Chery sideload: restore `media` for launcher + `CarUiLauncher` handoff to NavigationTemplate.
+- Auto-open car video UI on phone Play while AA connected; media browse/session triggers handoff.
+- See `docs/AA_LAUNCHER_HANDOFF.md`.
+
 ## 1.3.7 (2026-11-24)
 
 - AA launcher: drop `media` from `automotive_app_desc`; deny Gearhead MediaBrowser root so the icon opens **NavigationTemplate** / surface (not browse UI).

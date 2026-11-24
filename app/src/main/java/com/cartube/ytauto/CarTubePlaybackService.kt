@@ -542,6 +542,7 @@ class CarTubePlaybackService : MediaSessionService() {
         PlaybackController.attachPlayer(exo, item.title, item.videoId, mode, surfaceReady)
         if (mode == PlaybackController.PlaybackMode.CAR) {
             CarNavigationClaim.onPlaybackActive(item.title)
+            CarUiLauncher.launchCarVideoUi(applicationContext, "playback-start")
         }
 
         if (mode == PlaybackController.PlaybackMode.CAR) {

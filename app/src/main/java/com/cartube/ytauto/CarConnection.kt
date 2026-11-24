@@ -18,15 +18,21 @@ object CarConnection {
     /**
      * Route WebView play events to the car ExoPlayer when projection or CarTube session is up.
      */
+    val isAndroidAutoProjectionActive: Boolean
+        get() = projectionActive.get()
+
     val shouldAutoRouteToCar: Boolean
         get() = projectionActive.get() || isCarSessionActive
 
     fun setProjectionActive(active: Boolean) {
-        projectionActive.set(active)
+        val was = projectionActive.getAndSet(active)
         android.util.Log.i(
             CarTubePlaybackService.TAG,
             "[car] projection active=$active session=${activeSessions.get()}"
         )
+        if (active && !was && !isCarSessionActive) {
+            CarUiLauncher.launchCarVideoUi(CarTubeApp.instance, "projection-connected")
+        }
     }
 
     fun onSessionStarted() {

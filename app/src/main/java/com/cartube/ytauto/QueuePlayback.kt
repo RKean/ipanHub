@@ -8,6 +8,9 @@ object QueuePlayback {
 
     fun playNow(context: Context, item: QueueItem) {
         QueueController.playNow(item)
+        if (CarConnection.shouldAutoRouteToCar) {
+            CarUiLauncher.launchCarVideoUi(context.applicationContext, "phone-play-now")
+        }
         val sameTrack = PlaybackController.videoId == item.videoId
         CarTubePlaybackService.requestPlayCurrent(context, forceRestart = !sameTrack)
     }

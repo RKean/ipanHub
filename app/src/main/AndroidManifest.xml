@@ -38,6 +38,23 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
+            android:name=".CarNavigateTrampolineActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="com.cartube.ytauto.action.OPEN_CAR_VIDEO" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="geo" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"

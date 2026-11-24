@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <automotiveApp>
-    <!-- Video Car App: template + navigation only. Do NOT declare media here or AA merges to the browse UI. -->
+    <!-- Sideloaded Chery/Coolwalk: `media` needed for launcher visibility; video via CarApp + handoff. -->
     <uses name="template" />
     <uses name="navigation" />
+    <uses name="media" />
 </automotiveApp>

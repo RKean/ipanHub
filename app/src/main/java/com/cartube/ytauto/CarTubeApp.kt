@@ -14,11 +14,17 @@ class CarTubeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         QueueController.init(this)
         PlaybackEngine.init(this)
         PlaybackClient.ensureConnected(this)
         appScope.launch(Dispatchers.IO) {
             NewPipe.init(NewPipeDownloader.getInstance())
         }
+    }
+
+    companion object {
+        lateinit var instance: CarTubeApp
+            private set
     }
 }
