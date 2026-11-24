@@ -64,8 +64,17 @@ class CarTubeMediaBrowserService : MediaBrowserServiceCompat() {
             result.sendResult(mutableListOf())
             return
         }
-        // Do not advertise a browsable AA list (competes with NavigationTemplate entry).
-        result.sendResult(mutableListOf())
+        // Sideloaded AA builds often require a non-empty media root to list the app at all.
+        val description = MediaDescriptionCompat.Builder()
+            .setMediaId(ROOT_ID)
+            .setTitle(getString(R.string.app_name))
+            .setSubtitle(getString(R.string.aa_media_root_hint))
+            .build()
+        val rootItem = MediaBrowserCompat.MediaItem(
+            description,
+            MediaBrowserCompat.MediaItem.FLAG_BROWSABLE
+        )
+        result.sendResult(mutableListOf(rootItem))
     }
 
     private fun syncPlaybackState() {

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <automotiveApp>
-    <!-- Navigation + template: Coolwalk map surface. Legacy media browse is NOT advertised
-         (it opens a list card and never gives ACCESS_SURFACE while another nav app runs). -->
+    <!-- template + navigation: video map surface; media: sideloaded launcher discovery (v1.3.4 drop broke AA menu on many hosts) -->
     <uses name="template" />
     <uses name="navigation" />
+    <uses name="media" />
 </automotiveApp>

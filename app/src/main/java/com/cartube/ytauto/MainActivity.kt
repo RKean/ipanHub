@@ -61,7 +61,27 @@ class MainActivity : AppCompatActivity() {
     private var suggestSeq = 0
     private var userSeeking = false
     private var showingQueue = false
+    private var miniPanelUserPinned = false
+    private var userDismissedMiniPanel = false
+    private var carProjectionActive = false
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private companion object {
+        const val SUGGESTIONS_AUTO_HIDE_MS = 5_000L
+        const val MINI_PLAYER_AUTO_HIDE_MS = 5_000L
+    }
+
+    private val suggestionsAutoHide = Runnable { hideSuggestions() }
+    private val miniPlayerAutoHide = Runnable {
+        if (!PlaybackController.hasActivePlayback &&
+            !PlaybackController.isLoading &&
+            PlaybackController.playbackErrorMessage == null
+        ) {
+            userDismissedMiniPanel = true
+            miniPanelUserPinned = false
+            refreshMiniPlayerUi()
+        }
+    }
 
     private lateinit var searchAdapter: SearchResultsAdapter
     private lateinit var queueAdapter: QueueListAdapter
@@ -78,8 +98,15 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { }
 
-    private val queueListener = { refreshQueueUi(); refreshMiniPlayerUi() }
+    private val queueListener = {
+        refreshQueueUi()
+        refreshMiniPlayerUi()
+    }
     private val uiSyncListener = {
+        if (PlaybackController.hasActivePlayback || PlaybackController.isLoading) {
+            userDismissedMiniPanel = false
+            miniPanelUserPinned = true
+        }
         refreshMiniPlayerUi()
         PlaybackClient.ensureConnected(applicationContext)
     }
@@ -144,6 +171,8 @@ class MainActivity : AppCompatActivity() {
         searchAdapter = SearchResultsAdapter(
             onPlayNow = { result ->
                 ensureNotificationPermission()
+                userDismissedMiniPanel = false
+                miniPanelUserPinned = true
                 QueuePlayback.playNow(this, QueuePlayback.fromSearchResult(result))
                 RecentSearchStore.add(this, binding.searchInput.text?.toString().orEmpty())
             },
@@ -204,6 +233,18 @@ class MainActivity : AppCompatActivity() {
         )
         binding.suggestionsList.layoutManager = LinearLayoutManager(this)
         binding.suggestionsList.adapter = suggestionsAdapter
+        binding.suggestionsDismiss.setOnClickListener { hideSuggestions() }
+        binding.suggestionsList.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                scheduleSuggestionsAutoHide()
+            }
+        })
+    }
+
+    private fun scheduleSuggestionsAutoHide() {
+        mainHandler.removeCallbacks(suggestionsAutoHide)
+        if (!binding.suggestionsCard.isVisible) return
+        mainHandler.postDelayed(suggestionsAutoHide, SUGGESTIONS_AUTO_HIDE_MS)
     }
 
     private fun setupSearch() {
@@ -218,6 +259,7 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {
                 val text = s?.toString().orEmpty()
                 if (text.isBlank()) showRecentIfEmptyField() else requestSuggestions(text)
+                scheduleSuggestionsAutoHide()
             }
         })
         input.setOnKeyListener { _, keyCode, event ->
@@ -236,6 +278,7 @@ class MainActivity : AppCompatActivity() {
         suggestionsAdapter.showRecentRemove = true
         suggestionsAdapter.setSuggestions(recent)
         binding.suggestionsCard.isVisible = recent.isNotEmpty()
+        if (recent.isNotEmpty()) scheduleSuggestionsAutoHide()
     }
 
     private fun requestSuggestions(prefix: String) {
@@ -249,10 +292,12 @@ class MainActivity : AppCompatActivity() {
             suggestionsAdapter.showRecentRemove = false
             suggestionsAdapter.setSuggestions(list)
             binding.suggestionsCard.isVisible = list.isNotEmpty()
+            if (list.isNotEmpty()) scheduleSuggestionsAutoHide()
         }
     }
 
     private fun hideSuggestions() {
+        mainHandler.removeCallbacks(suggestionsAutoHide)
         binding.suggestionsCard.isVisible = false
         suggestJob?.cancel()
     }
@@ -309,10 +354,34 @@ class MainActivity : AppCompatActivity() {
                     val d = PlaybackClient.durationMs()
                     if (d > 0) PlaybackClient.seekTo(d * progress / 1000L)
                 }
+                scheduleMiniPlayerAutoHide()
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) { userSeeking = true }
             override fun onStopTrackingTouch(seekBar: SeekBar?) { userSeeking = false }
         })
+        findViewById<ImageButton>(R.id.miniDismiss).setOnClickListener {
+            userDismissedMiniPanel = true
+            miniPanelUserPinned = false
+            mainHandler.removeCallbacks(miniPlayerAutoHide)
+            refreshMiniPlayerUi()
+        }
+        binding.queuePanelFab.setOnClickListener {
+            userDismissedMiniPanel = false
+            miniPanelUserPinned = true
+            refreshMiniPlayerUi()
+        }
+    }
+
+    private fun scheduleMiniPlayerAutoHide() {
+        mainHandler.removeCallbacks(miniPlayerAutoHide)
+        val mustPin = PlaybackController.hasActivePlayback ||
+            PlaybackController.isLoading ||
+            PlaybackController.playbackErrorMessage != null ||
+            miniPanelUserPinned ||
+            showingQueue
+        if (mustPin) return
+        if (QueueController.allItems().isEmpty()) return
+        mainHandler.postDelayed(miniPlayerAutoHide, MINI_PLAYER_AUTO_HIDE_MS)
     }
 
     private fun setupTabs() {
@@ -326,15 +395,19 @@ class MainActivity : AppCompatActivity() {
         binding.queueList.isVisible = false
         binding.chipSearch.isChecked = true
         hideSuggestions()
+        refreshMiniPlayerUi()
     }
 
     private fun showQueueTab() {
         showingQueue = true
+        userDismissedMiniPanel = false
+        miniPanelUserPinned = true
         binding.searchList.isVisible = false
         binding.queueList.isVisible = true
         binding.chipQueue.isChecked = true
         hideSuggestions()
         refreshQueueUi()
+        refreshMiniPlayerUi()
     }
 
     private fun setupToolbar() {
@@ -399,7 +472,15 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         AaCarConnection(this).type.observe(this) { state ->
-            CarConnection.setProjectionActive(state == AaCarConnection.CONNECTION_TYPE_PROJECTION)
+            val projection = state == AaCarConnection.CONNECTION_TYPE_PROJECTION
+            carProjectionActive = projection
+            CarConnection.setProjectionActive(projection)
+            if (projection) {
+                hideSuggestions()
+                userDismissedMiniPanel = true
+                miniPanelUserPinned = false
+                refreshMiniPlayerUi()
+            }
         }
         PlaybackClient.connect(applicationContext)
         QueueController.addListener(queueListener)
@@ -415,6 +496,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         mainHandler.removeCallbacks(tickRunnable)
+        mainHandler.removeCallbacks(suggestionsAutoHide)
+        mainHandler.removeCallbacks(miniPlayerAutoHide)
         QueueController.removeListener(queueListener)
         PlaybackClient.removeUiListener(uiSyncListener)
         PlaybackController.removePlaybackListener(uiSyncListener)
@@ -433,7 +516,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshMiniPlayerUi() {
         val active = PlaybackController.hasActivePlayback
-        findViewById<View>(R.id.miniPlayer).isVisible = active || QueueController.allItems().isNotEmpty()
+        val loading = PlaybackController.isLoading
+        val queueCount = QueueController.allItems().size
         val title = PlaybackController.title
         val videoId = PlaybackController.videoId
         val error = PlaybackController.playbackErrorMessage
@@ -466,7 +550,23 @@ class MainActivity : AppCompatActivity() {
         queueNext.isEnabled = QueueController.hasNext()
         queuePrev.alpha = if (queuePrev.isEnabled) 1f else 0.38f
         queueNext.alpha = if (queueNext.isEnabled) 1f else 0.38f
-        if (!active && !PlaybackController.isLoading) return
+        val mustShowPanel = active || loading || error != null ||
+            miniPanelUserPinned || showingQueue ||
+            (queueCount > 0 && !userDismissedMiniPanel && !carProjectionActive)
+        binding.miniPlayer.root.isVisible = mustShowPanel
+        binding.queuePanelFab.isVisible = !mustShowPanel && queueCount > 0
+        if (binding.queuePanelFab.isVisible) {
+            binding.queuePanelFab.text = getString(R.string.show_queue_panel, queueCount)
+        }
+        if (!mustShowPanel) {
+            mainHandler.removeCallbacks(miniPlayerAutoHide)
+            if (!active && !loading && error == null && queueCount > 0) {
+                scheduleMiniPlayerAutoHide()
+            }
+            return
+        }
+        scheduleMiniPlayerAutoHide()
+        if (!active && !loading && error == null) return
         miniPlayPause.setIconResource(
             if (PlaybackClient.isPlaying()) R.drawable.ic_pause else R.drawable.ic_play
         )

@@ -7,6 +7,10 @@
     <string name="loading_title">Loading %1$s</string>
     <string name="loading_subtitle">Starting playback…</string>
     <string name="search_prompt">Search and tap a result to play on the car</string>
+    <string name="aa_media_root_hint">For video: open ipanHub under Navigation in the car launcher (enable Unknown sources on the phone if sideloaded).</string>
+    <string name="dismiss_suggestions">Close</string>
+    <string name="show_queue_panel">Queue (%1$d)</string>
+    <string name="dismiss_queue_panel">Hide queue panel</string>
     <string name="search_no_results">No results — try different words</string>
     <string name="tab_search">Search</string>
     <string name="tab_queue">Queue</string>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.6 (2026-11-24)
+
+- Restore **automotive_app_desc `media`** + MediaBrowser root (AA launcher for sideload).
+- **minCarApiLevel** 6 (Car App Library 1.7).
+- Search suggestions + queue mini-panel **auto-hide**; dismiss + FAB restore.
+
 ## 1.3.5 (2026-11-24)
 
 - Fix **NavigationTemplate** crash: map action strip is **icon-only**; status text via `destinationTravelEstimate`.
